@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Handwriting Font Replacer</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="dashboard-body">
+    <div class="background-glow"></div>
+
+    <!-- Navigation Bar -->
+    <header class="navbar">
+        <div class="nav-brand">
+            <div class="brand-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 20h16"/>
+                    <path d="m6 16 6-12 6 12"/>
+                    <path d="M8 12h8"/>
+                </svg>
+            </div>
+            <span class="brand-title">Handwritten Font Replacer</span>
+            <span class="badge badge-accent">v1.0</span>
+        </div>
+
+        <div class="nav-actions">
+            <div class="user-pill">
+                <span class="status-dot"></span>
+                <span>User: <strong>{{ user }}</strong></span>
+            </div>
+            <a href="/logout" class="btn btn-secondary btn-sm">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                <span>Logout</span>
+            </a>
+        </div>
+    </header>
+
+    <main class="main-container">
+        <!-- Progress Stepper -->
+        <div class="stepper">
+            <div class="step-item active" id="step-indicator-1">
+                <div class="step-circle">1</div>
+                <div class="step-label">Upload Assets</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step-item" id="step-indicator-2">
+                <div class="step-circle">2</div>
+                <div class="step-label">Review OCR Mappings</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step-item" id="step-indicator-3">
+                <div class="step-circle">3</div>
+                <div class="step-label">Generate & Download</div>
+            </div>
+        </div>
+
+        <!-- Section 1: Upload Files -->
+        <section class="card step-section active" id="section-upload">
+            <div class="card-header">
+                <h2>1. Upload Base Font & Handwritten Glyphs</h2>
+                <p>Provide your existing template font file and a ZIP archive containing scanned images of your handwritten letters.</p>
+            </div>
+
+            <form id="upload-form" class="upload-grid">
+                <!-- Dropzone A: Base Font File -->
+                <div class="dropzone-card">
+                    <div class="dropzone-header">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <path d="M10 13l2-2 2 2"/>
+                            <path d="M12 11v6"/>
+                        </svg>
+                        <h3>Base Font File</h3>
+                        <span class="file-type-hint">.TTF or .OTF</span>
+                    </div>
+
+                    <div class="file-input-wrapper">
+                        <input type="file" id="font-file-input" name="font_file" accept=".ttf,.otf" required hidden>
+                        <label for="font-file-input" class="dropzone-label" id="font-dropzone-label">
+                            <div class="dropzone-content">
+                                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17 8 12 3 7 8"/>
+                                    <line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                                <p class="primary-text">Drag & drop base font file here</p>
+                                <p class="secondary-text">or <span class="highlight">browse computer</span></p>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="selected-file-info" id="font-file-info"></div>
+                </div>
+
+                <!-- Dropzone B: Scanned Glyphs ZIP -->
+                <div class="dropzone-card">
+                    <div class="dropzone-header">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                            <line x1="12" y1="22.08" x2="12" y2="12"/>
+                        </svg>
+                        <h3>Scanned Handwritten Glyphs ZIP</h3>
+                        <span class="file-type-hint">.ZIP containing PNG/JPG</span>
+                    </div>
+
+                    <div class="file-input-wrapper">
+                        <input type="file" id="zip-file-input" name="zip_file" accept=".zip" required hidden>
+                        <label for="zip-file-input" class="dropzone-label" id="zip-dropzone-label">
+                            <div class="dropzone-content">
+                                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17 8 12 3 7 8"/>
+                                    <line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                                <p class="primary-text">Drag & drop scanned images ZIP here</p>
+                                <p class="secondary-text">or <span class="highlight">browse computer</span></p>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="selected-file-info" id="zip-file-info"></div>
+                </div>
+
+                <div class="form-actions full-width">
+                    <button type="submit" class="btn btn-primary btn-lg" id="btn-upload">
+                        <span>Run OCR & Process Scans</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+                        </svg>
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Section 2: Review OCR Mapping (Human-in-the-loop) -->
+        <section class="card step-section" id="section-review">
+            <div class="card-header flex-between">
+                <div>
+                    <h2>2. Human-in-the-Loop Mapping Review</h2>
+                    <p>Tesseract OCR has auto-guessed characters for each scanned image. Verify and correct any misidentified letters below.</p>
+                </div>
+                <div class="review-stats-badge">
+                    <span id="total-glyphs-count">0</span> Glyphs Processed
+                </div>
+            </div>
+
+            <!-- Mapping Controls Toolbar -->
+            <div class="toolbar">
+                <div class="search-box">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <input type="text" id="glyph-filter" placeholder="Filter characters...">
+                </div>
+
+                <div class="warning-banner hidden" id="duplicate-warning">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                    <span id="duplicate-warning-text">Duplicate character mappings detected! Each character must be unique.</span>
+                </div>
+            </div>
+
+            <!-- Glyph Mapping Cards Grid -->
+            <div class="glyph-grid" id="glyph-grid">
+                <!-- Dynamically populated via app.js -->
+            </div>
+
+            <div class="card-footer flex-between">
+                <button type="button" class="btn btn-secondary" id="btn-back-upload">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 12H5"/><path d="m12 19-7-7 7-7"/>
+                    </svg>
+                    <span>Back to Upload</span>
+                </button>
+
+                <button type="button" class="btn btn-accent btn-lg" id="btn-generate-font">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                    <span>Confirm & Generate Font</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Section 3: Generation & Interactive Preview & Download -->
+        <section class="card step-section" id="section-download">
+            <!-- Loading State -->
+            <div class="loading-state" id="generation-loading">
+                <div class="spinner-glow"></div>
+                <h3>Synthesizing Custom Font File...</h3>
+                <p>Clearing unicode slots, vectorizing raster images with Potrace, and setting side bearings with FontForge.</p>
+            </div>
+
+            <!-- Success Download State -->
+            <div class="success-state hidden" id="generation-success">
+                <div class="success-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                </div>
+                <h2>Font Successfully Generated!</h2>
+                <p>Your base font has been updated with your vector handwritten glyphs, auto-aligned to the baseline with side bearings set to standard spacing (50 units).</p>
+
+                <!-- Interactive Live Font Tester -->
+                <div class="font-tester-card">
+                    <h3>Interactive Font Preview</h3>
+                    <p>Test your generated handwritten font below:</p>
+                    <textarea id="font-preview-input" rows="3" placeholder="Type here to test your custom font glyphs...">The quick brown fox jumps over the lazy dog 1234567890</textarea>
+                </div>
+
+                <div class="download-actions">
+                    <a id="btn-download-font" href="#" download="custom_handwritten_font.ttf" class="btn btn-primary btn-lg">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        <span>Download Updated Font (.TTF)</span>
+                    </a>
+
+                    <button type="button" class="btn btn-secondary" id="btn-start-over">
+                        <span>Process Another Font</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- JS -->
+    <script src="/static/app.js"></script>
+</body>
+</html>

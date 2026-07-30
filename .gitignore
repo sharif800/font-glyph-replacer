@@ -1,0 +1,33 @@
+# Environment & Secrets
+.env
+.env.local
+
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Uploads & Temporary Data
+tmp/
+uploads/
+/tmp/font_replacer_uploads/
+*.ttf
+*.otf
+*.zip
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS Generated
+.DS_Store
+Thumbs.db
