@@ -4,10 +4,13 @@ FROM python:3.10-slim-bullseye
 # Prevent Python from writing .pyc files & enable unbuffered stdout
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    PYTHONPATH="/usr/lib/python3/dist-packages:${PYTHONPATH}"
 
 # Set working directory inside container
 WORKDIR /app
+RUN mkdir -p /tmp/font_replacer_uploads && chmod 777 /tmp/font_replacer_uploads
+
 
 # Install system binaries: FontForge, Potrace, Tesseract OCR, Python-FontForge
 RUN apt-get update && apt-get install -y --no-install-recommends \

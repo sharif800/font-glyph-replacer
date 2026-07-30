@@ -1,6 +1,8 @@
 import os
 import shutil
 import uuid
+import logging
+import traceback
 from typing import List
 from fastapi import FastAPI, Request, Form, UploadFile, File, HTTPException, Depends, status
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
@@ -13,11 +15,28 @@ from app.auth import authenticate_user, create_access_token, is_authenticated, C
 from app.ocr_engine import extract_and_ocr_zip
 from app.font_engine import process_and_build_font
 
+# Logging configuration
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+logger = logging.getLogger("font_replacer")
+
 app = FastAPI(
     title="Handwritten Font Replacer",
     description="Automated font glyph replacer using Tesseract OCR, Potrace, and FontForge.",
     version="1.0.0"
 )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    err_msg = f"Unhandled Exception: {exc}\n{traceback.format_exc()}"
+    logger.error(err_msg)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal Server Error: {str(exc)}"}
+    )
+
 
 # Static files and Templates setup
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
