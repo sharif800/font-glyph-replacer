@@ -58,7 +58,7 @@ class GenerateFontRequest(BaseModel):
 async def login_page(request: Request):
     if is_authenticated(request):
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
-    return templates.TemplateResponse("login.html", {"request": request, "error": None})
+    return templates.TemplateResponse(request=request, name="login.html", context={"error": None})
 
 @app.post("/login", response_class=HTMLResponse)
 async def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
@@ -73,10 +73,11 @@ async def login_submit(request: Request, username: str = Form(...), password: st
         )
         return response
     else:
-        return templates.TemplateResponse("login.html", {
-            "request": request,
-            "error": "Invalid username or password credentials."
-        })
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={"error": "Invalid username or password credentials."}
+        )
 
 @app.get("/logout")
 async def logout():
@@ -88,10 +89,12 @@ async def logout():
 async def dashboard_page(request: Request):
     if not is_authenticated(request):
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
-        "user": ADMIN_USERNAME
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context={"user": ADMIN_USERNAME}
+    )
+
 
 @app.post("/api/upload")
 async def handle_upload(
