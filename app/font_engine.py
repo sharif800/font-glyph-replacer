@@ -75,14 +75,33 @@ def generate_font_with_fontforge_python(base_font_path: str, char_svg_mappings: 
     font = fontforge.open(base_font_path)
     em_size = font.em if font.em > 0 else 1000
 
+    # Collect existing mapped unicodes
+    mapped_unicodes = {ord(item["char"][0]): item for item in char_svg_mappings if item.get("char")}
+
+    # Expand mappings so missing case counterparts (e.g. 'u' -> 'U' or 'U' -> 'u') are automatically populated
+    expanded_items = list(char_svg_mappings)
     for item in char_svg_mappings:
+        char = item.get("char")
+        if not char:
+            continue
+        c = char[0]
+        alt_c = c.swapcase()
+        if alt_c != c and ord(alt_c) not in mapped_unicodes:
+            expanded_items.append({
+                "char": alt_c,
+                "svg_path": item["svg_path"]
+            })
+            mapped_unicodes[ord(alt_c)] = True
+
+    for item in expanded_items:
         char = item["char"]
         svg_path = item["svg_path"]
         
         if not char or not os.path.exists(svg_path):
             continue
             
-        unicode_val = ord(char)
+        c_char = char[0]
+        unicode_val = ord(c_char)
         font.selection.select(unicode_val)
         
         glyph = font.createChar(unicode_val, f"uni{unicode_val:04X}")
@@ -93,16 +112,22 @@ def generate_font_with_fontforge_python(base_font_path: str, char_svg_mappings: 
         if bbox and (bbox[2] - bbox[0] > 0) and (bbox[3] - bbox[1] > 0):
             glyph_height = bbox[3] - bbox[1]
             
-            # Typography proportional scaling & baseline positioning
-            if char in SHORT_LOWERCASE:
-                target_height = em_size * 0.48
-                target_ymin = 0.0
-            elif char in DESCENDER_LOWERCASE:
-                target_height = em_size * 0.70
-                target_ymin = -em_size * 0.20
-            elif char in ASCENDER_LOWERCASE:
-                target_height = em_size * 0.70
-                target_ymin = 0.0
+            c_lower = c_char.lower()
+            is_lowercase = c_char.islower()
+            
+            if is_lowercase:
+                if c_lower in SHORT_LOWERCASE:
+                    target_height = em_size * 0.48
+                    target_ymin = 0.0
+                elif c_lower in DESCENDER_LOWERCASE:
+                    target_height = em_size * 0.70
+                    target_ymin = -em_size * 0.20
+                elif c_lower in ASCENDER_LOWERCASE:
+                    target_height = em_size * 0.70
+                    target_ymin = 0.0
+                else:
+                    target_height = em_size * 0.52
+                    target_ymin = 0.0
             else:  # Uppercase A-Z, Digits 0-9, Punctuation
                 target_height = em_size * 0.70
                 target_ymin = 0.0
@@ -138,12 +163,29 @@ metadata = json.loads(sys.argv[4])
 font = fontforge.open(base_font_path)
 em_size = font.em if font.em > 0 else 1000
 
+mapped_unicodes = {{ord(item["char"][0]): item for item in mappings if item.get("char")}}
+
+expanded_items = list(mappings)
 for item in mappings:
+    char = item.get("char")
+    if not char:
+        continue
+    c = char[0]
+    alt_c = c.swapcase()
+    if alt_c != c and ord(alt_c) not in mapped_unicodes:
+        expanded_items.append({{
+            "char": alt_c,
+            "svg_path": item["svg_path"]
+        }})
+        mapped_unicodes[ord(alt_c)] = True
+
+for item in expanded_items:
     char = item["char"]
     svg_path = item["svg_path"]
     if not char:
         continue
-    unicode_val = ord(char)
+    c_char = char[0]
+    unicode_val = ord(c_char)
     font.selection.select(unicode_val)
     glyph = font.createChar(unicode_val, "uni%04X" % unicode_val)
     glyph.clear()
@@ -153,15 +195,22 @@ for item in mappings:
     if bbox and (bbox[2] - bbox[0] > 0) and (bbox[3] - bbox[1] > 0):
         glyph_height = bbox[3] - bbox[1]
         
-        if char in SHORT_LOWERCASE:
-            target_height = em_size * 0.48
-            target_ymin = 0.0
-        elif char in DESCENDER_LOWERCASE:
-            target_height = em_size * 0.70
-            target_ymin = -em_size * 0.20
-        elif char in ASCENDER_LOWERCASE:
-            target_height = em_size * 0.70
-            target_ymin = 0.0
+        c_lower = c_char.lower()
+        is_lowercase = c_char.islower()
+        
+        if is_lowercase:
+            if c_lower in SHORT_LOWERCASE:
+                target_height = em_size * 0.48
+                target_ymin = 0.0
+            elif c_lower in DESCENDER_LOWERCASE:
+                target_height = em_size * 0.70
+                target_ymin = -em_size * 0.20
+            elif c_lower in ASCENDER_LOWERCASE:
+                target_height = em_size * 0.70
+                target_ymin = 0.0
+            else:
+                target_height = em_size * 0.52
+                target_ymin = 0.0
         else:
             target_height = em_size * 0.70
             target_ymin = 0.0
@@ -244,9 +293,6 @@ def process_and_build_font(base_font_path: str, mappings: list[dict], metadata: 
     return output_font_path
 
 def merge_latin_fonts_with_fontforge_python(base_font_a_path: str, source_font_b_path: str, metadata: dict, output_font_path: str):
-    """
-    Mode 2 Engine: Transfers Latin glyphs (A-Z, a-z, 0-9, symbols) from Font B to Font A.
-    """
     import fontforge
 
     font_a = fontforge.open(base_font_a_path)
@@ -323,9 +369,6 @@ font_b.close()
             os.remove(temp_script)
 
 def merge_latin_fonts(base_font_a_path: str, source_font_b_path: str, metadata: dict, output_dir: str) -> str:
-    """
-    Main function for Mode 2: Font-to-Font Latin Replacement.
-    """
     os.makedirs(output_dir, exist_ok=True)
     output_font_path = os.path.join(output_dir, "merged_latin_font.ttf")
 

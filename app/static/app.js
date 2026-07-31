@@ -53,6 +53,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnM1Back = document.getElementById('btn-m1-back');
     const btnM1Generate = document.getElementById('btn-m1-generate');
 
+    const btnConvertLowercase = document.getElementById('btn-convert-lowercase');
+    const btnConvertUppercase = document.getElementById('btn-convert-uppercase');
+
     // Mode 2 Elements
     const m2UploadForm = document.getElementById('m2-upload-form');
     const fontAInput = document.getElementById('font-a-input');
@@ -138,7 +141,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    // Attach dropzones safely
     setupFileDropzone(fontFileInput, fontDropzoneLabel, fontFileInfo);
     setupFileDropzone(zipFileInput, zipDropzoneLabel, zipFileInfo);
     setupFileDropzone(fontAInput, fontALabel, fontAInfo);
@@ -186,7 +188,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnSwitchMode) btnSwitchMode.addEventListener('click', showModeSelection);
     if (btnStartOver) btnStartOver.addEventListener('click', showModeSelection);
 
-    // Auto update Full Name when Family or Style input changes
     const setupAutoNaming = (familyInput, styleInput, fullInput) => {
         if (!familyInput || !styleInput || !fullInput) return;
         const update = () => {
@@ -202,6 +203,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setupAutoNaming(m1FamilyName, m1StyleName, m1FullName);
     setupAutoNaming(m2FamilyName, m2StyleName, m2FullName);
+
+    // Toolbar Case Conversion Buttons
+    if (btnConvertLowercase) {
+        btnConvertLowercase.addEventListener('click', () => {
+            glyphData.forEach((g, idx) => {
+                if (g.guessed_char) {
+                    g.guessed_char = g.guessed_char.toLowerCase();
+                }
+            });
+            renderGlyphGrid(glyphData);
+        });
+    }
+
+    if (btnConvertUppercase) {
+        btnConvertUppercase.addEventListener('click', () => {
+            glyphData.forEach((g, idx) => {
+                if (g.guessed_char) {
+                    g.guessed_char = g.guessed_char.toUpperCase();
+                }
+            });
+            renderGlyphGrid(glyphData);
+        });
+    }
 
     // --- Mode 1: Upload & OCR Review ---
     if (m1UploadForm) {
