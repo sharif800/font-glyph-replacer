@@ -5,6 +5,10 @@ import tempfile
 import re
 from PIL import Image, ImageOps
 
+SHORT_LOWERCASE = set("acemnorsuvwxz")
+ASCENDER_LOWERCASE = set("bdfhklti")
+DESCENDER_LOWERCASE = set("gjpqy")
+
 def sanitize_font_identifier(name: str) -> str:
     """Sanitizes font name for PostScript fontname identifier (alphanumeric and hyphens only)."""
     clean = re.sub(r'[^a-zA-Z0-9-]', '', name)
@@ -23,7 +27,6 @@ def apply_font_metadata(font, metadata: dict):
     font.familyname = family_name
     font.fullname = full_name
 
-    # Set SFNT Name table entries for cross-platform compatibility (Windows / Mac)
     font.appendSFNTName('English (US)', 'Family', family_name)
     font.appendSFNTName('English (US)', 'SubFamily', style_name)
     font.appendSFNTName('English (US)', 'Fullname', full_name)
@@ -89,13 +92,28 @@ def generate_font_with_fontforge_python(base_font_path: str, char_svg_mappings: 
         bbox = glyph.boundingBox()
         if bbox and (bbox[2] - bbox[0] > 0) and (bbox[3] - bbox[1] > 0):
             glyph_height = bbox[3] - bbox[1]
-            target_height = em_size * 0.75
-            scale_factor = target_height / glyph_height if glyph_height > 0 else 1.0
             
+            # Typography proportional scaling & baseline positioning
+            if char in SHORT_LOWERCASE:
+                target_height = em_size * 0.48
+                target_ymin = 0.0
+            elif char in DESCENDER_LOWERCASE:
+                target_height = em_size * 0.70
+                target_ymin = -em_size * 0.20
+            elif char in ASCENDER_LOWERCASE:
+                target_height = em_size * 0.70
+                target_ymin = 0.0
+            else:  # Uppercase A-Z, Digits 0-9, Punctuation
+                target_height = em_size * 0.70
+                target_ymin = 0.0
+
+            scale_factor = target_height / glyph_height if glyph_height > 0 else 1.0
             glyph.transform((scale_factor, 0, 0, scale_factor, 0, 0))
+            
             bbox = glyph.boundingBox()
-            ymin = bbox[1]
-            glyph.transform((1, 0, 0, 1, 0, -ymin))
+            current_ymin = bbox[1]
+            y_shift = target_ymin - current_ymin
+            glyph.transform((1, 0, 0, 1, 0, y_shift))
             
         glyph.left_side_bearing = 50
         glyph.right_side_bearing = 50
@@ -107,6 +125,10 @@ def generate_font_with_fontforge_python(base_font_path: str, char_svg_mappings: 
 def generate_font_via_subprocess(base_font_path: str, char_svg_mappings: list[dict], metadata: dict, output_font_path: str):
     script_content = f"""
 import fontforge, sys, json, re
+
+SHORT_LOWERCASE = set("acemnorsuvwxz")
+ASCENDER_LOWERCASE = set("bdfhklti")
+DESCENDER_LOWERCASE = set("gjpqy")
 
 base_font_path = sys.argv[1]
 output_font_path = sys.argv[2]
@@ -130,13 +152,27 @@ for item in mappings:
     bbox = glyph.boundingBox()
     if bbox and (bbox[2] - bbox[0] > 0) and (bbox[3] - bbox[1] > 0):
         glyph_height = bbox[3] - bbox[1]
-        target_height = em_size * 0.75
+        
+        if char in SHORT_LOWERCASE:
+            target_height = em_size * 0.48
+            target_ymin = 0.0
+        elif char in DESCENDER_LOWERCASE:
+            target_height = em_size * 0.70
+            target_ymin = -em_size * 0.20
+        elif char in ASCENDER_LOWERCASE:
+            target_height = em_size * 0.70
+            target_ymin = 0.0
+        else:
+            target_height = em_size * 0.70
+            target_ymin = 0.0
+
         scale_factor = target_height / glyph_height if glyph_height > 0 else 1.0
         glyph.transform((scale_factor, 0, 0, scale_factor, 0, 0))
         
         bbox = glyph.boundingBox()
-        ymin = bbox[1]
-        glyph.transform((1, 0, 0, 1, 0, -ymin))
+        current_ymin = bbox[1]
+        y_shift = target_ymin - current_ymin
+        glyph.transform((1, 0, 0, 1, 0, y_shift))
         
     glyph.left_side_bearing = 50
     glyph.right_side_bearing = 50
@@ -216,7 +252,6 @@ def merge_latin_fonts_with_fontforge_python(base_font_a_path: str, source_font_b
     font_a = fontforge.open(base_font_a_path)
     font_b = fontforge.open(source_font_b_path)
 
-    # Standard Printable ASCII / Latin range (U+0020 space to U+007E tilde)
     latin_unicodes = range(0x0020, 0x007F)
     transferred_count = 0
 
