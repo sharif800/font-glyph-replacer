@@ -4,9 +4,11 @@
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- State Variables ---
-    let currentMode = null; // 'mode1' or 'mode2'
+    let currentMode = null; // 'mode1', 'mode2', or 'mode3'
     let sessionUploadId = null;
     let glyphData = [];
+    let matrixData = [];
+    let selectedUnicodes = new Set();
 
     // --- DOM Elements ---
     const btnSwitchMode = document.getElementById('btn-switch-mode');
@@ -17,13 +19,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const sectionM1Upload = document.getElementById('section-m1-upload');
     const sectionM1Review = document.getElementById('section-m1-review');
     const sectionM2Upload = document.getElementById('section-m2-upload');
+    const sectionM3Upload = document.getElementById('section-m3-upload');
+    const sectionM3Review = document.getElementById('section-m3-review');
     const sectionDownload = document.getElementById('section-download');
 
-    // Cards for Mode Select
+    // Mode Selection Cards & Buttons
     const cardMode1 = document.getElementById('card-mode-1');
     const cardMode2 = document.getElementById('card-mode-2');
+    const cardMode3 = document.getElementById('card-mode-3');
     const btnSelectMode1 = document.getElementById('btn-select-mode-1');
     const btnSelectMode2 = document.getElementById('btn-select-mode-2');
+    const btnSelectMode3 = document.getElementById('btn-select-mode-3');
 
     // Stepper Indicators
     const stepIndicator1 = document.getElementById('step-indicator-1');
@@ -32,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const step1Label = document.getElementById('step-1-label');
     const step2Label = document.getElementById('step-2-label');
 
-    // Mode 1 Elements
+    // Option 1 Elements
     const m1UploadForm = document.getElementById('m1-upload-form');
     const fontFileInput = document.getElementById('font-file-input');
     const zipFileInput = document.getElementById('zip-file-input');
@@ -56,7 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnConvertLowercase = document.getElementById('btn-convert-lowercase');
     const btnConvertUppercase = document.getElementById('btn-convert-uppercase');
 
-    // Mode 2 Elements
+    // Option 2 Elements
     const m2UploadForm = document.getElementById('m2-upload-form');
     const fontAInput = document.getElementById('font-a-input');
     const fontBInput = document.getElementById('font-b-input');
@@ -69,6 +75,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const m2FamilyName = document.getElementById('m2-family-name');
     const m2StyleName = document.getElementById('m2-style-name');
     const m2FullName = document.getElementById('m2-full-name');
+
+    // Option 3 Elements
+    const m3UploadForm = document.getElementById('m3-upload-form');
+    const fontA3Input = document.getElementById('font-a3-input');
+    const fontB3Input = document.getElementById('font-b3-input');
+    const fontA3Label = document.getElementById('font-a3-label');
+    const fontB3Label = document.getElementById('font-b3-label');
+    const fontA3Info = document.getElementById('font-a3-info');
+    const fontB3Info = document.getElementById('font-b3-info');
+    const btnM3Inspect = document.getElementById('btn-m3-inspect');
+
+    const matrixGrid = document.getElementById('matrix-grid');
+    const matrixFilterInput = document.getElementById('matrix-filter');
+    const selectedUnicodesCount = document.getElementById('selected-unicodes-count');
+    const btnMatrixSelectAll = document.getElementById('btn-matrix-select-all');
+    const btnMatrixDeselectAll = document.getElementById('btn-matrix-deselect-all');
+    const btnMatrixVowels = document.getElementById('btn-matrix-vowels');
+    const btnM3Back = document.getElementById('btn-m3-back');
+    const btnM3Generate = document.getElementById('btn-m3-generate');
+
+    const m3FamilyName = document.getElementById('m3-family-name');
+    const m3StyleName = document.getElementById('m3-style-name');
+    const m3FullName = document.getElementById('m3-full-name');
 
     // Download / Preview Elements
     const generationLoading = document.getElementById('generation-loading');
@@ -83,6 +112,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sectionM1Upload) sectionM1Upload.classList.remove('active');
         if (sectionM1Review) sectionM1Review.classList.remove('active');
         if (sectionM2Upload) sectionM2Upload.classList.remove('active');
+        if (sectionM3Upload) sectionM3Upload.classList.remove('active');
+        if (sectionM3Review) sectionM3Review.classList.remove('active');
         if (sectionDownload) sectionDownload.classList.remove('active');
     };
 
@@ -90,6 +121,8 @@ document.addEventListener('DOMContentLoaded', () => {
         currentMode = null;
         sessionUploadId = null;
         glyphData = [];
+        matrixData = [];
+        selectedUnicodes.clear();
         hideAllSections();
         if (sectionModeSelect) sectionModeSelect.classList.add('active');
         if (mainStepper) mainStepper.classList.add('hidden');
@@ -145,13 +178,12 @@ document.addEventListener('DOMContentLoaded', () => {
     setupFileDropzone(zipFileInput, zipDropzoneLabel, zipFileInfo);
     setupFileDropzone(fontAInput, fontALabel, fontAInfo);
     setupFileDropzone(fontBInput, fontBLabel, fontBInfo);
+    setupFileDropzone(fontA3Input, fontA3Label, fontA3Info);
+    setupFileDropzone(fontB3Input, fontB3Label, fontB3Info);
 
     // --- Mode Selection Handlers ---
     const activateMode1 = (e) => {
-        if (e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
+        if (e) { e.preventDefault(); e.stopPropagation(); }
         currentMode = 'mode1';
         hideAllSections();
         if (sectionM1Upload) sectionM1Upload.classList.add('active');
@@ -164,10 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const activateMode2 = (e) => {
-        if (e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
+        if (e) { e.preventDefault(); e.stopPropagation(); }
         currentMode = 'mode2';
         hideAllSections();
         if (sectionM2Upload) sectionM2Upload.classList.add('active');
@@ -179,11 +208,27 @@ document.addEventListener('DOMContentLoaded', () => {
         setStep(1);
     };
 
+    const activateMode3 = (e) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        currentMode = 'mode3';
+        hideAllSections();
+        if (sectionM3Upload) sectionM3Upload.classList.add('active');
+        if (mainStepper) mainStepper.classList.remove('hidden');
+        if (btnSwitchMode) btnSwitchMode.classList.remove('hidden');
+
+        if (step1Label) step1Label.textContent = 'Upload Fonts';
+        if (step2Label) step2Label.textContent = 'Matrix Comparison';
+        setStep(1);
+    };
+
     if (cardMode1) cardMode1.addEventListener('click', activateMode1);
     if (btnSelectMode1) btnSelectMode1.addEventListener('click', activateMode1);
 
     if (cardMode2) cardMode2.addEventListener('click', activateMode2);
     if (btnSelectMode2) btnSelectMode2.addEventListener('click', activateMode2);
+
+    if (cardMode3) cardMode3.addEventListener('click', activateMode3);
+    if (btnSelectMode3) btnSelectMode3.addEventListener('click', activateMode3);
 
     if (btnSwitchMode) btnSwitchMode.addEventListener('click', showModeSelection);
     if (btnStartOver) btnStartOver.addEventListener('click', showModeSelection);
@@ -203,8 +248,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setupAutoNaming(m1FamilyName, m1StyleName, m1FullName);
     setupAutoNaming(m2FamilyName, m2StyleName, m2FullName);
+    setupAutoNaming(m3FamilyName, m3StyleName, m3FullName);
 
-    // Toolbar Case Conversion Buttons
+    // Toolbar Case Conversion Buttons (Mode 1)
     if (btnConvertLowercase) {
         btnConvertLowercase.addEventListener('click', () => {
             glyphData.forEach((g, idx) => {
@@ -439,7 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- Mode 2: Font-to-Font Latin Replacement ---
+    // --- Mode 2: All-Latin Font-to-Font Replacement ---
     if (m2UploadForm) {
         m2UploadForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -508,6 +554,232 @@ document.addEventListener('DOMContentLoaded', () => {
             } finally {
                 btnM2Generate.disabled = false;
                 btnM2Generate.querySelector('span').textContent = 'Match & Merge Fonts';
+            }
+        });
+    }
+
+    // --- Mode 3: Selective Font-to-Font Latin Replacement ---
+    if (m3UploadForm) {
+        m3UploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (!fontA3Input.files[0] || !fontB3Input.files[0]) {
+                alert('Please select both Base Font A and Source Candidate Font B.');
+                return;
+            }
+
+            btnM3Inspect.disabled = true;
+            btnM3Inspect.querySelector('span').textContent = 'Inspecting Glyphs...';
+
+            try {
+                const formData = new FormData();
+                formData.append('font_a', fontA3Input.files[0]);
+                formData.append('font_b', fontB3Input.files[0]);
+
+                const uploadRes = await fetch('/api/upload-font2font-selective', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!uploadRes.ok) {
+                    const errData = await uploadRes.json();
+                    throw new Error(errData.detail || 'Font inspection failed');
+                }
+
+                const data = await uploadRes.json();
+                sessionUploadId = data.upload_id;
+                matrixData = data.comparison_items;
+
+                // Default all available characters in Font B to selected
+                selectedUnicodes.clear();
+                matrixData.forEach(item => {
+                    if (item.exists_b) {
+                        selectedUnicodes.add(item.unicode);
+                    }
+                });
+
+                renderMatrixGrid(matrixData);
+
+                const fontABaseName = fontA3Input.files[0].name.replace(/\.[^/.]+$/, "");
+                if (m3FamilyName) m3FamilyName.value = `${fontABaseName} Selective`;
+                if (m3StyleName) m3StyleName.value = "Regular";
+                if (m3FullName) m3FullName.value = `${fontABaseName} Selective Regular`;
+
+                hideAllSections();
+                if (sectionM3Review) sectionM3Review.classList.add('active');
+                setStep(2);
+
+            } catch (err) {
+                alert(`Inspection Error: ${err.message}`);
+            } finally {
+                btnM3Inspect.disabled = false;
+                btnM3Inspect.querySelector('span').textContent = 'Inspect & Compare Glyphs';
+            }
+        });
+    }
+
+    const renderMatrixGrid = (items) => {
+        if (!matrixGrid) return;
+        matrixGrid.innerHTML = '';
+        updateSelectedCount();
+
+        items.forEach(item => {
+            const card = document.createElement('div');
+            const isChecked = selectedUnicodes.has(item.unicode);
+            card.className = `matrix-card ${isChecked ? 'selected' : ''}`;
+            card.dataset.unicode = item.unicode;
+
+            card.innerHTML = `
+                <div class="matrix-card-header">
+                    <span class="matrix-char">${item.char}</span>
+                    <input type="checkbox" 
+                           class="matrix-checkbox" 
+                           data-unicode="${item.unicode}" 
+                           ${isChecked ? 'checked' : ''} 
+                           ${!item.exists_b ? 'disabled' : ''}>
+                </div>
+                <div class="matrix-comparison-row">
+                    <div class="glyph-source-pill">
+                        <span class="badge ${item.exists_a ? 'badge-accent' : 'badge-secondary'}">Font A</span>
+                        <span>${item.exists_a ? item.width_a : 'N/A'}</span>
+                    </div>
+                    <div class="glyph-source-pill">
+                        <span class="badge ${item.exists_b ? 'badge-cyan' : 'badge-secondary'}">Font B</span>
+                        <span>${item.exists_b ? item.width_b : 'N/A'}</span>
+                    </div>
+                </div>
+            `;
+
+            matrixGrid.appendChild(card);
+        });
+
+        attachMatrixCheckboxEvents();
+    };
+
+    const attachMatrixCheckboxEvents = () => {
+        if (!matrixGrid) return;
+        const checkboxes = matrixGrid.querySelectorAll('.matrix-checkbox');
+        checkboxes.forEach(cb => {
+            cb.addEventListener('change', (e) => {
+                const ucode = parseInt(e.target.dataset.unicode, 10);
+                const card = e.target.closest('.matrix-card');
+                if (e.target.checked) {
+                    selectedUnicodes.add(ucode);
+                    if (card) card.classList.add('selected');
+                } else {
+                    selectedUnicodes.delete(ucode);
+                    if (card) card.classList.remove('selected');
+                }
+                updateSelectedCount();
+            });
+        });
+    };
+
+    const updateSelectedCount = () => {
+        if (selectedUnicodesCount) {
+            selectedUnicodesCount.textContent = selectedUnicodes.size;
+        }
+    };
+
+    if (btnMatrixSelectAll) {
+        btnMatrixSelectAll.addEventListener('click', () => {
+            matrixData.forEach(item => {
+                if (item.exists_b) selectedUnicodes.add(item.unicode);
+            });
+            renderMatrixGrid(matrixData);
+        });
+    }
+
+    if (btnMatrixDeselectAll) {
+        btnMatrixDeselectAll.addEventListener('click', () => {
+            selectedUnicodes.clear();
+            renderMatrixGrid(matrixData);
+        });
+    }
+
+    if (btnMatrixVowels) {
+        btnMatrixVowels.addEventListener('click', () => {
+            const vowelChars = new Set("aeiouAEIOU");
+            selectedUnicodes.clear();
+            matrixData.forEach(item => {
+                if (item.exists_b && vowelChars.has(item.char)) {
+                    selectedUnicodes.add(item.unicode);
+                }
+            });
+            renderMatrixGrid(matrixData);
+        });
+    }
+
+    if (matrixFilterInput) {
+        matrixFilterInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const cards = matrixGrid.querySelectorAll('.matrix-card');
+            
+            cards.forEach(card => {
+                const ucode = parseInt(card.dataset.unicode, 10);
+                const charStr = String.fromCharCode(ucode).toLowerCase();
+                
+                if (!query || charStr.includes(query)) {
+                    card.style.display = 'flex';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+    }
+
+    if (btnM3Back) {
+        btnM3Back.addEventListener('click', () => {
+            hideAllSections();
+            if (sectionM3Upload) sectionM3Upload.classList.add('active');
+            setStep(1);
+        });
+    }
+
+    if (btnM3Generate) {
+        btnM3Generate.addEventListener('click', async () => {
+            if (selectedUnicodes.size === 0) {
+                alert('Please select at least one character to replace.');
+                return;
+            }
+
+            hideAllSections();
+            if (sectionDownload) sectionDownload.classList.add('active');
+            setStep(3);
+
+            if (generationLoading) generationLoading.classList.remove('hidden');
+            if (generationSuccess) generationSuccess.classList.add('hidden');
+
+            try {
+                const payload = {
+                    upload_id: sessionUploadId,
+                    selected_unicodes: Array.from(selectedUnicodes),
+                    metadata: {
+                        family_name: m3FamilyName ? m3FamilyName.value.trim() || 'Selective Latin Font' : 'Selective Latin Font',
+                        style_name: m3StyleName ? m3StyleName.value.trim() || 'Regular' : 'Regular',
+                        full_name: m3FullName ? m3FullName.value.trim() || 'Selective Latin Font Regular' : 'Selective Latin Font Regular'
+                    }
+                };
+
+                const response = await fetch('/api/generate-font2font-selective', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || 'Selective font merge failed');
+                }
+
+                const data = await response.json();
+                handleFontGenerationSuccess(data.download_url);
+
+            } catch (err) {
+                alert(`Selective Font Merge Error: ${err.message}`);
+                hideAllSections();
+                if (sectionM3Review) sectionM3Review.classList.add('active');
+                setStep(2);
             }
         });
     }

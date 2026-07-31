@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Font Synthesis & Glyph Replacer Studio</title>
+    <title>Dashboard - Font Synthesis Studio</title>
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,13 +21,11 @@
         <div class="nav-brand">
             <div class="brand-icon">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M4 20h16"/>
-                    <path d="m6 16 6-12 6 12"/>
-                    <path d="M8 12h8"/>
+                    <path d="M4 20h16"/><path d="m6 16 6-12 6 12"/><path d="M8 12h8"/>
                 </svg>
             </div>
             <span class="brand-title">Font Synthesis Studio</span>
-            <span class="badge badge-accent">v2.0</span>
+            <span class="badge badge-accent">v3.0</span>
         </div>
 
         <div class="nav-actions">
@@ -44,8 +42,7 @@
             <a href="/logout" class="btn btn-secondary btn-sm">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                    <polyline points="16 17 21 12 16 7"/>
-                    <line x1="21" y1="12" x2="9" y2="12"/>
+                    <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
                 </svg>
                 <span>Logout</span>
             </a>
@@ -63,7 +60,7 @@
                 <p>Choose how you would like to generate your custom font version below:</p>
             </div>
 
-            <div class="mode-select-grid">
+            <div class="mode-select-grid-3">
                 <!-- Option 1 Card -->
                 <div class="mode-card" id="card-mode-1">
                     <div class="mode-icon-wrapper">
@@ -73,7 +70,7 @@
                         </svg>
                     </div>
                     <h3>Option 1: Handwritten Scanned Images Replacer</h3>
-                    <p>Upload a base font file and a ZIP of scanned handwritten image letters. Tesseract OCR will auto-detect letters, vectorize images via Potrace, and replace Unicode slots in FontForge.</p>
+                    <p>Upload a base font file and a ZIP of scanned handwritten images. OCR auto-detects letters, tightly crops ink-strokes, and vectorizes glyphs into FontForge.</p>
                     <div class="mode-badge">Base Font + Images ZIP</div>
                     <button type="button" class="btn btn-primary btn-block mt-auto" id="btn-select-mode-1">Select Option 1</button>
                 </div>
@@ -84,20 +81,32 @@
                         <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
                             <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-                            <path d="m8 7 4 8 4-8"/>
-                            <path d="M9.5 12h5"/>
+                            <path d="m8 7 4 8 4-8"/><path d="M9.5 12h5"/>
                         </svg>
                     </div>
-                    <h3>Option 2: Font-to-Font Latin Replacer</h3>
-                    <p>Upload two fonts (Base Font A & Source Font B). Automatically match, extract, and replace all Latin glyphs (A-Z, a-z, 0-9, punctuation) from Font B into Font A to create a unified new version.</p>
+                    <h3>Option 2: All-Latin Font-to-Font Replacer</h3>
+                    <p>Upload Base Font A & Source Font B. Automatically match and replace ALL Latin glyphs (A-Z, a-z, 0-9, punctuation) from Font B into Font A.</p>
                     <div class="mode-badge accent">Base Font A + Source Font B</div>
                     <button type="button" class="btn btn-accent btn-block mt-auto" id="btn-select-mode-2">Select Option 2</button>
                 </div>
-            </div>
 
+                <!-- Option 3 Card -->
+                <div class="mode-card" id="card-mode-3">
+                    <div class="mode-icon-wrapper cyan">
+                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 11l3 3L22 4"/>
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                        </svg>
+                    </div>
+                    <h3>Option 3: Selective Latin Replacer & Matrix Studio</h3>
+                    <p>Compare Latin characters side-by-side between Font A and Font B. Selectively pick exact letters to replace with precision metrics auto-centering & ink fitting.</p>
+                    <div class="mode-badge cyan">Interactive Comparison Matrix</div>
+                    <button type="button" class="btn btn-cyan btn-block mt-auto" id="btn-select-mode-3">Select Option 3</button>
+                </div>
+            </div>
         </section>
 
-        <!-- Stepper Bar (Hidden during Mode Selection) -->
+        <!-- Stepper Bar -->
         <div class="stepper hidden" id="main-stepper">
             <div class="step-item active" id="step-indicator-1">
                 <div class="step-circle">1</div>
@@ -116,7 +125,7 @@
         </div>
 
         <!-- ===================================================================
-             MODE 1: UPLOAD (Base Font + Images ZIP)
+             OPTION 1: UPLOAD (Base Font + Images ZIP)
              =================================================================== -->
         <section class="card step-section" id="section-m1-upload">
             <div class="card-header">
@@ -125,13 +134,11 @@
             </div>
 
             <form id="m1-upload-form" class="upload-grid">
-                <!-- Dropzone A: Base Font File -->
                 <div class="dropzone-card">
                     <div class="dropzone-header">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                            <path d="M10 13l2-2 2 2"/><path d="M12 11v6"/>
+                            <polyline points="14 2 14 8 20 8"/><path d="M10 13l2-2 2 2"/><path d="M12 11v6"/>
                         </svg>
                         <h3>Base Font File</h3>
                         <span class="file-type-hint">.TTF or .OTF</span>
@@ -153,7 +160,6 @@
                     <div class="selected-file-info" id="font-file-info"></div>
                 </div>
 
-                <!-- Dropzone B: Scanned Glyphs ZIP -->
                 <div class="dropzone-card">
                     <div class="dropzone-header">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -192,9 +198,7 @@
             </form>
         </section>
 
-        <!-- ===================================================================
-             MODE 1: REVIEW MAPPING & FONT RENAMING
-             =================================================================== -->
+        <!-- OPTION 1 REVIEW -->
         <section class="card step-section" id="section-m1-review">
             <div class="card-header flex-between">
                 <div>
@@ -206,7 +210,6 @@
                 </div>
             </div>
 
-            <!-- Custom Font Renaming Metadata Panel -->
             <div class="font-naming-card">
                 <div class="naming-header">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -230,7 +233,6 @@
                 </div>
             </div>
 
-            <!-- Mapping Controls Toolbar -->
             <div class="toolbar">
                 <div class="search-box">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -253,8 +255,6 @@
                 </div>
             </div>
 
-
-            <!-- Glyph Mapping Grid -->
             <div class="glyph-grid" id="glyph-grid"></div>
 
             <div class="card-footer flex-between">
@@ -275,16 +275,15 @@
         </section>
 
         <!-- ===================================================================
-             MODE 2: UPLOAD & LATIN REPLACER (Font A + Font B)
+             OPTION 2: ALL-LATIN REPLACER (Font A + Font B)
              =================================================================== -->
         <section class="card step-section" id="section-m2-upload">
             <div class="card-header">
-                <h2>Font-to-Font Latin Replacement</h2>
-                <p>Upload your Base Primary Font A and Source Latin Font B to copy and replace Latin glyphs (A-Z, a-z, 0-9, punctuation).</p>
+                <h2>All-Latin Font-to-Font Replacement</h2>
+                <p>Upload your Base Primary Font A and Source Latin Font B to copy and replace all Latin glyphs.</p>
             </div>
 
             <form id="m2-upload-form" class="upload-grid">
-                <!-- Dropzone Font A -->
                 <div class="dropzone-card">
                     <div class="dropzone-header">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -311,7 +310,6 @@
                     <div class="selected-file-info" id="font-a-info"></div>
                 </div>
 
-                <!-- Dropzone Font B -->
                 <div class="dropzone-card">
                     <div class="dropzone-header">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -337,7 +335,6 @@
                     <div class="selected-file-info" id="font-b-info"></div>
                 </div>
 
-                <!-- Custom Font Naming Panel for Mode 2 -->
                 <div class="font-naming-card full-width mt-1">
                     <div class="naming-header">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -373,17 +370,155 @@
         </section>
 
         <!-- ===================================================================
-             GENERATION & DOWNLOAD SCREEN (Common to both modes)
+             OPTION 3: SELECTIVE LATIN REPLACER (Comparison Matrix)
+             =================================================================== -->
+        <section class="card step-section" id="section-m3-upload">
+            <div class="card-header">
+                <h2>Option 3: Selective Font-to-Font Latin Replacer</h2>
+                <p>Upload Font A and Font B to compare glyphs side-by-side and selectively choose which characters to replace.</p>
+            </div>
+
+            <form id="m3-upload-form" class="upload-grid">
+                <div class="dropzone-card">
+                    <div class="dropzone-header">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                        </svg>
+                        <h3>Base Primary Font (Font A)</h3>
+                        <span class="file-type-hint">.TTF or .OTF</span>
+                    </div>
+
+                    <div class="file-input-wrapper">
+                        <input type="file" id="font-a3-input" name="font_a3" accept=".ttf,.otf" required hidden>
+                        <label for="font-a3-input" class="dropzone-label" id="font-a3-label">
+                            <div class="dropzone-content">
+                                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                                <p class="primary-text">Drag & drop Base Font A here</p>
+                                <p class="secondary-text">or <span class="highlight">browse computer</span></p>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="selected-file-info" id="font-a3-info"></div>
+                </div>
+
+                <div class="dropzone-card">
+                    <div class="dropzone-header">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                        </svg>
+                        <h3>Source Candidate Font (Font B)</h3>
+                        <span class="file-type-hint">.TTF or .OTF</span>
+                    </div>
+
+                    <div class="file-input-wrapper">
+                        <input type="file" id="font-b3-input" name="font_b3" accept=".ttf,.otf" required hidden>
+                        <label for="font-b3-input" class="dropzone-label" id="font-b3-label">
+                            <div class="dropzone-content">
+                                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                                <p class="primary-text">Drag & drop Source Font B here</p>
+                                <p class="secondary-text">or <span class="highlight">browse computer</span></p>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="selected-file-info" id="font-b3-info"></div>
+                </div>
+
+                <div class="form-actions full-width">
+                    <button type="submit" class="btn btn-cyan btn-lg" id="btn-m3-inspect">
+                        <span>Inspect & Compare Glyphs</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+                        </svg>
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- OPTION 3 MATRIX REVIEW -->
+        <section class="card step-section" id="section-m3-review">
+            <div class="card-header flex-between">
+                <div>
+                    <h2>Selective Glyph Replacement Matrix</h2>
+                    <p>Check the characters you wish to replace from Font B into Font A with precision metrics normalization.</p>
+                </div>
+                <div class="review-stats-badge cyan">
+                    <span id="selected-unicodes-count">0</span> Characters Selected
+                </div>
+            </div>
+
+            <div class="font-naming-card">
+                <div class="naming-header">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                    </svg>
+                    <h3>Custom Font Naming & Metadata</h3>
+                </div>
+                <div class="naming-grid">
+                    <div class="form-group">
+                        <label for="m3-family-name">Font Family Name</label>
+                        <input type="text" id="m3-family-name" class="form-control" placeholder="Selective Latin Font">
+                    </div>
+                    <div class="form-group">
+                        <label for="m3-style-name">Subfamily / Style</label>
+                        <input type="text" id="m3-style-name" class="form-control" placeholder="Regular">
+                    </div>
+                    <div class="form-group">
+                        <label for="m3-full-name">Full Font Name</label>
+                        <input type="text" id="m3-full-name" class="form-control" placeholder="Selective Latin Font Regular">
+                    </div>
+                </div>
+            </div>
+
+            <div class="toolbar">
+                <div class="search-box">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <input type="text" id="matrix-filter" placeholder="Filter characters...">
+                </div>
+
+                <div class="case-conversion-actions">
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-matrix-select-all">Select All</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-matrix-deselect-all">Deselect All</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-matrix-vowels">Vowels Only</button>
+                </div>
+            </div>
+
+            <div class="matrix-grid" id="matrix-grid"></div>
+
+            <div class="card-footer flex-between">
+                <button type="button" class="btn btn-secondary" id="btn-m3-back">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 12H5"/><path d="m12 19-7-7 7-7"/>
+                    </svg>
+                    <span>Back to Upload</span>
+                </button>
+
+                <button type="button" class="btn btn-cyan btn-lg" id="btn-m3-generate">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                    <span>Confirm & Merge Selected Glyphs</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             GENERATION & DOWNLOAD SCREEN (Common to all modes)
              =================================================================== -->
         <section class="card step-section" id="section-download">
-            <!-- Loading State -->
             <div class="loading-state" id="generation-loading">
                 <div class="spinner-glow"></div>
                 <h3>Synthesizing & Naming Custom Font File...</h3>
-                <p>Processing glyph vectors, updating SFNT font metadata table, and setting side bearings with FontForge.</p>
+                <p>Processing glyph vectors, tightly fitting ink contours, updating SFNT font metadata table, and setting side bearings with FontForge.</p>
             </div>
 
-            <!-- Success Download State -->
             <div class="success-state hidden" id="generation-success">
                 <div class="success-icon">
                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -392,9 +527,8 @@
                     </svg>
                 </div>
                 <h2>Font Successfully Generated & Renamed!</h2>
-                <p>Your custom font has been compiled with updated Latin glyphs, baseline alignment, and new SFNT family metadata.</p>
+                <p>Your custom font has been compiled with updated Latin glyphs, ink-stroke baseline alignment, and new SFNT family metadata.</p>
 
-                <!-- Interactive Live Font Tester -->
                 <div class="font-tester-card">
                     <h3>Interactive Font Preview</h3>
                     <p>Test your generated font below:</p>
@@ -420,9 +554,6 @@
     </main>
 
     <!-- JS -->
-    <script src="/static/app.js?v=2.3"></script>
+    <script src="/static/app.js?v=3.0"></script>
 </body>
 </html>
-
-
-

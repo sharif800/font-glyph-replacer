@@ -3,6 +3,8 @@ import sys
 import subprocess
 import tempfile
 import re
+import base64
+from io import BytesIO
 from PIL import Image, ImageOps
 
 SHORT_LOWERCASE = set("acemnorsuvwxz")
@@ -18,7 +20,7 @@ def apply_font_metadata(font, metadata: dict):
     """
     Applies custom Font Family, Style, Full Name, and SFNT metadata to a FontForge font object.
     """
-    family_name = metadata.get("family_name", "").strip() or "Custom Handwritten Font"
+    family_name = metadata.get("family_name", "").strip() or "Custom Font"
     style_name = metadata.get("style_name", "").strip() or "Regular"
     full_name = metadata.get("full_name", "").strip() or f"{family_name} {style_name}"
     postscript_name = sanitize_font_identifier(f"{family_name}-{style_name}")
@@ -35,8 +37,11 @@ def apply_font_metadata(font, metadata: dict):
 
 def convert_image_to_svg(image_path: str, svg_output_path: str) -> bool:
     """
-    Converts a PNG/JPG raster image to SVG vector format using Potrace.
-    Preprocesses the image to a high-contrast 1-bit BMP/PBM first.
+    Ink-Stroke Auto-Cropping & Vectorization:
+    1. Preprocesses image to 1-bit binary.
+    2. Auto-detects exact bounding box of the actual drawn ink strokes (ignoring surrounding paper margins).
+    3. Crops tightly around the ink strokes (with 5% relative padding).
+    4. Traces vector SVG with Potrace.
     """
     temp_dir = os.path.dirname(svg_output_path)
     bmp_path = os.path.join(temp_dir, f"temp_{os.path.basename(image_path)}.bmp")
@@ -47,11 +52,34 @@ def convert_image_to_svg(image_path: str, svg_output_path: str) -> bool:
             threshold = 180
             binary = gray.point(lambda p: 255 if p > threshold else 0)
             
+            # Check corner pixel color to determine background
             corner_val = binary.getpixel((0, 0))
-            if corner_val == 0:
+            if corner_val == 0:  # Dark background
                 binary = ImageOps.invert(binary)
                 
             bw = binary.convert('1')
+            
+            # Detect exact ink stroke bounding box
+            # Invert so ink strokes are white (255) for getbbox()
+            inv_bw = ImageOps.invert(bw)
+            ink_bbox = inv_bw.getbbox()
+            
+            if ink_bbox:
+                left, top, right, bottom = ink_bbox
+                width, height = bw.size
+                
+                # Add 5% padding around ink bbox
+                pad_x = int((right - left) * 0.05) + 2
+                pad_y = int((bottom - top) * 0.05) + 2
+                
+                crop_left = max(0, left - pad_x)
+                crop_top = max(0, top - pad_y)
+                crop_right = min(width, right + pad_x)
+                crop_bottom = min(height, bottom + pad_y)
+                
+                if (crop_right - crop_left > 5) and (crop_bottom - crop_top > 5):
+                    bw = bw.crop((crop_left, crop_top, crop_right, crop_bottom))
+
             bw.save(bmp_path)
             
         cmd = ["potrace", "-s", "-o", svg_output_path, bmp_path]
@@ -75,10 +103,8 @@ def generate_font_with_fontforge_python(base_font_path: str, char_svg_mappings: 
     font = fontforge.open(base_font_path)
     em_size = font.em if font.em > 0 else 1000
 
-    # Collect existing mapped unicodes
     mapped_unicodes = {ord(item["char"][0]): item for item in char_svg_mappings if item.get("char")}
 
-    # Expand mappings so missing case counterparts (e.g. 'u' -> 'U' or 'U' -> 'u') are automatically populated
     expanded_items = list(char_svg_mappings)
     for item in char_svg_mappings:
         char = item.get("char")
@@ -257,9 +283,6 @@ font.close()
             os.remove(temp_script)
 
 def process_and_build_font(base_font_path: str, mappings: list[dict], metadata: dict, output_dir: str) -> str:
-    """
-    Mode 1 Pipeline: Vectorizes handwritten images and imports them into base font.
-    """
     os.makedirs(output_dir, exist_ok=True)
     svg_dir = os.path.join(output_dir, "svgs")
     os.makedirs(svg_dir, exist_ok=True)
@@ -291,6 +314,8 @@ def process_and_build_font(base_font_path: str, mappings: list[dict], metadata: 
         generate_font_via_subprocess(base_font_path, char_svg_mappings, metadata, output_font_path)
         
     return output_font_path
+
+# --- Mode 2 & Mode 3 Engines ---
 
 def merge_latin_fonts_with_fontforge_python(base_font_a_path: str, source_font_b_path: str, metadata: dict, output_font_path: str):
     import fontforge
@@ -376,5 +401,166 @@ def merge_latin_fonts(base_font_a_path: str, source_font_b_path: str, metadata: 
         merge_latin_fonts_with_fontforge_python(base_font_a_path, source_font_b_path, metadata, output_font_path)
     except ImportError:
         merge_latin_fonts_via_subprocess(base_font_a_path, source_font_b_path, metadata, output_font_path)
+
+    return output_font_path
+
+# --- Option 3: Selective Font-to-Font Latin Replacer & Inspection ---
+
+def inspect_latin_glyphs_comparison(font_a_path: str, font_b_path: str) -> list[dict]:
+    """
+    Inspects Font A and Font B for Latin characters (U+0020 to U+007E)
+    and returns metadata list for side-by-side matrix comparison.
+    """
+    results = []
+    latin_unicodes = range(0x0021, 0x007F)  # Printable characters
+
+    # Use inline script or direct fontforge to extract glyph presence & character labels
+    import json
+    script_content = f"""
+import fontforge, sys, json
+
+font_a = fontforge.open(sys.argv[1])
+font_b = fontforge.open(sys.argv[2])
+
+results = []
+for ucode in range(0x0021, 0x007F):
+    char = chr(ucode)
+    exists_a = ucode in font_a
+    exists_b = ucode in font_b
+    
+    width_a = font_a[ucode].width if exists_a else 0
+    width_b = font_b[ucode].width if exists_b else 0
+    
+    results.append({{
+        "unicode": ucode,
+        "char": char,
+        "exists_a": exists_a,
+        "exists_b": exists_b,
+        "width_a": width_a,
+        "width_b": width_b
+    }})
+
+font_a.close()
+font_b.close()
+print(json.dumps(results))
+"""
+    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
+        f.write(script_content)
+        temp_script = f.name
+
+    try:
+        cmd = ["fontforge", "-script", temp_script, font_a_path, font_b_path]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        if res.returncode == 0:
+            results = json.loads(res.stdout.strip())
+        else:
+            print(f"FontForge inspection error: {res.stderr}")
+    except Exception as e:
+        print(f"Error inspecting fonts: {e}")
+    finally:
+        if os.path.exists(temp_script):
+            os.remove(temp_script)
+
+    return results
+
+def selective_merge_latin_fonts_with_fontforge_python(base_font_a_path: str, source_font_b_path: str, selected_unicodes: list[int], metadata: dict, output_font_path: str):
+    import fontforge
+
+    font_a = fontforge.open(base_font_a_path)
+    font_b = fontforge.open(source_font_b_path)
+
+    for ucode in selected_unicodes:
+        if ucode in font_b:
+            orig_width = font_a[ucode].width if ucode in font_a else font_b[ucode].width
+            
+            font_b.selection.select(ucode)
+            font_b.copy()
+            font_a.selection.select(ucode)
+            font_a.paste()
+            
+            # Auto-Center horizontally and preserve side bearings
+            glyph = font_a[ucode]
+            bbox = glyph.boundingBox()
+            if bbox and (bbox[2] - bbox[0] > 0):
+                glyph_w = bbox[2] - bbox[0]
+                target_sb = max(30, int((orig_width - glyph_w) / 2))
+                glyph.left_side_bearing = target_sb
+                glyph.right_side_bearing = target_sb
+
+    apply_font_metadata(font_a, metadata)
+    font_a.generate(output_font_path)
+
+    font_a.close()
+    font_b.close()
+
+def selective_merge_latin_fonts_via_subprocess(base_font_a_path: str, source_font_b_path: str, selected_unicodes: list[int], metadata: dict, output_font_path: str):
+    script_content = f"""
+import fontforge, sys, json, re
+
+font_a_path = sys.argv[1]
+font_b_path = sys.argv[2]
+output_path = sys.argv[3]
+selected_unicodes = json.loads(sys.argv[4])
+metadata = json.loads(sys.argv[5])
+
+font_a = fontforge.open(font_a_path)
+font_b = fontforge.open(font_b_path)
+
+for ucode in selected_unicodes:
+    if ucode in font_b:
+        orig_width = font_a[ucode].width if ucode in font_a else font_b[ucode].width
+        
+        font_b.selection.select(ucode)
+        font_b.copy()
+        font_a.selection.select(ucode)
+        font_a.paste()
+        
+        glyph = font_a[ucode]
+        bbox = glyph.boundingBox()
+        if bbox and (bbox[2] - bbox[0] > 0):
+            glyph_w = bbox[2] - bbox[0]
+            target_sb = max(30, int((orig_width - glyph_w) / 2))
+            glyph.left_side_bearing = target_sb
+            glyph.right_side_bearing = target_sb
+
+family_name = metadata.get("family_name", "").strip() or "Selective Latin Font"
+style_name = metadata.get("style_name", "").strip() or "Regular"
+full_name = metadata.get("full_name", "").strip() or (family_name + " " + style_name)
+postscript_name = re.sub(r'[^a-zA-Z0-9-]', '', family_name + "-" + style_name) or "SelectiveLatinFont-Regular"
+
+font_a.fontname = postscript_name
+font_a.familyname = family_name
+font_a.fullname = full_name
+
+font_a.appendSFNTName('English (US)', 'Family', family_name)
+font_a.appendSFNTName('English (US)', 'SubFamily', style_name)
+font_a.appendSFNTName('English (US)', 'Fullname', full_name)
+
+font_a.generate(output_path)
+font_a.close()
+font_b.close()
+"""
+    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
+        f.write(script_content)
+        temp_script = f.name
+
+    try:
+        import json
+        cmd = ["fontforge", "-script", temp_script, base_font_a_path, source_font_b_path, output_font_path, json.dumps(selected_unicodes), json.dumps(metadata)]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        if res.returncode != 0:
+            raise RuntimeError(f"FontForge selective merge execution failed: {res.stderr}")
+    finally:
+        if os.path.exists(temp_script):
+            os.remove(temp_script)
+
+def selective_merge_latin_fonts(base_font_a_path: str, source_font_b_path: str, selected_unicodes: list[int], metadata: dict, output_dir: str) -> str:
+    os.makedirs(output_dir, exist_ok=True)
+    output_font_path = os.path.join(output_dir, "selective_latin_font.ttf")
+
+    try:
+        selective_merge_latin_fonts_with_fontforge_python(base_font_a_path, source_font_b_path, selected_unicodes, metadata, output_font_path)
+    except ImportError:
+        selective_merge_latin_fonts_via_subprocess(base_font_a_path, source_font_b_path, selected_unicodes, metadata, output_font_path)
 
     return output_font_path

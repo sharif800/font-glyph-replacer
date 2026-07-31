@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from app.config import UPLOAD_DIR, ADMIN_USERNAME, ADMIN_PASSWORD
 from app.auth import authenticate_user, create_access_token, is_authenticated, COOKIE_NAME
 from app.ocr_engine import extract_and_ocr_zip
-from app.font_engine import process_and_build_font, merge_latin_fonts
+from app.font_engine import process_and_build_font, merge_latin_fonts, inspect_latin_glyphs_comparison, selective_merge_latin_fonts
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,9 +22,9 @@ logging.basicConfig(
 logger = logging.getLogger("font_replacer")
 
 app = FastAPI(
-    title="Handwritten & Latin Font Replacer",
+    title="Handwritten & Latin Font Replacer Studio",
     description="Automated font glyph replacer using Tesseract OCR, Potrace, and FontForge.",
-    version="2.0.0"
+    version="3.0.0"
 )
 
 @app.exception_handler(Exception)
@@ -57,6 +57,11 @@ class GenerateFontRequest(BaseModel):
 
 class GenerateFont2FontRequest(BaseModel):
     upload_id: str
+    metadata: FontMetadata = FontMetadata()
+
+class GenerateSelectiveFontRequest(BaseModel):
+    upload_id: str
+    selected_unicodes: List[int]
     metadata: FontMetadata = FontMetadata()
 
 # --- Auth Routes ---
@@ -102,7 +107,7 @@ async def dashboard_page(request: Request):
         context={"user": ADMIN_USERNAME}
     )
 
-# --- Mode 1 API: Handwritten Glyphs (ZIP + Base Font) ---
+# --- Option 1 API: Handwritten Glyphs (ZIP + Base Font) ---
 
 @app.post("/api/upload")
 async def handle_upload(
@@ -177,7 +182,7 @@ async def handle_generate_font(request: Request, body: GenerateFontRequest):
         "download_url": f"/api/download-font/{body.upload_id}"
     }
 
-# --- Mode 2 API: Font-to-Font Latin Replacement ---
+# --- Option 2 API: All-Latin Font-to-Font Replacement ---
 
 @app.post("/api/upload-font2font")
 async def handle_upload_font2font(
@@ -242,6 +247,86 @@ async def handle_generate_font2font(request: Request, body: GenerateFont2FontReq
 
     if not os.path.exists(compiled_font_path):
         raise HTTPException(status_code=500, detail="Failed to compile merged font file")
+
+    return {
+        "status": "success",
+        "download_url": f"/api/download-font/{body.upload_id}"
+    }
+
+# --- Option 3 API: Selective Latin Replacement & Matrix Inspection ---
+
+@app.post("/api/upload-font2font-selective")
+async def handle_upload_font2font_selective(
+    request: Request,
+    font_a: UploadFile = File(...),
+    font_b: UploadFile = File(...)
+):
+    if not is_authenticated(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    ext_a = os.path.splitext(font_a.filename)[1].lower()
+    ext_b = os.path.splitext(font_b.filename)[1].lower()
+
+    if ext_a not in ['.ttf', '.otf'] or ext_b not in ['.ttf', '.otf']:
+        raise HTTPException(status_code=400, detail="Both files must be .ttf or .otf font files")
+
+    upload_id = str(uuid.uuid4())
+    session_dir = os.path.join(UPLOAD_DIR, upload_id)
+    os.makedirs(session_dir, exist_ok=True)
+
+    saved_a_path = os.path.join(session_dir, f"font_a{ext_a}")
+    saved_b_path = os.path.join(session_dir, f"font_b{ext_b}")
+
+    with open(saved_a_path, "wb") as f:
+        shutil.copyfileobj(font_a.file, f)
+    with open(saved_b_path, "wb") as f:
+        shutil.copyfileobj(font_b.file, f)
+
+    comparison_items = inspect_latin_glyphs_comparison(saved_a_path, saved_b_path)
+
+    return {
+        "upload_id": upload_id,
+        "font_a_filename": font_a.filename,
+        "font_b_filename": font_b.filename,
+        "comparison_items": comparison_items
+    }
+
+@app.post("/api/generate-font2font-selective")
+async def handle_generate_font2font_selective(request: Request, body: GenerateSelectiveFontRequest):
+    if not is_authenticated(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    session_dir = os.path.join(UPLOAD_DIR, body.upload_id)
+    if not os.path.exists(session_dir):
+        raise HTTPException(status_code=404, detail="Upload session expired or not found")
+
+    font_a_path = None
+    font_b_path = None
+    for f in os.listdir(session_dir):
+        if f.startswith("font_a"):
+            font_a_path = os.path.join(session_dir, f)
+        elif f.startswith("font_b"):
+            font_b_path = os.path.join(session_dir, f)
+
+    if not font_a_path or not font_b_path:
+        raise HTTPException(status_code=400, detail="Missing source or base font in session")
+
+    metadata_dict = body.metadata.model_dump() if hasattr(body.metadata, 'model_dump') else body.metadata.dict()
+    output_dir = os.path.join(session_dir, "output")
+
+    try:
+        compiled_font_path = selective_merge_latin_fonts(
+            font_a_path,
+            font_b_path,
+            body.selected_unicodes,
+            metadata_dict,
+            output_dir
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Selective font merge error: {str(e)}")
+
+    if not os.path.exists(compiled_font_path):
+        raise HTTPException(status_code=500, detail="Failed to compile selective merged font file")
 
     return {
         "status": "success",
