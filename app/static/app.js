@@ -22,6 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Cards for Mode Select
     const cardMode1 = document.getElementById('card-mode-1');
     const cardMode2 = document.getElementById('card-mode-2');
+    const btnSelectMode1 = document.getElementById('btn-select-mode-1');
+    const btnSelectMode2 = document.getElementById('btn-select-mode-2');
 
     // Stepper Indicators
     const stepIndicator1 = document.getElementById('step-indicator-1');
@@ -74,11 +76,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Helper Functions ---
     const hideAllSections = () => {
-        sectionModeSelect.classList.remove('active');
-        sectionM1Upload.classList.remove('active');
-        sectionM1Review.classList.remove('active');
-        sectionM2Upload.classList.remove('active');
-        sectionDownload.classList.remove('active');
+        if (sectionModeSelect) sectionModeSelect.classList.remove('active');
+        if (sectionM1Upload) sectionM1Upload.classList.remove('active');
+        if (sectionM1Review) sectionM1Review.classList.remove('active');
+        if (sectionM2Upload) sectionM2Upload.classList.remove('active');
+        if (sectionDownload) sectionDownload.classList.remove('active');
     };
 
     const showModeSelection = () => {
@@ -86,22 +88,24 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionUploadId = null;
         glyphData = [];
         hideAllSections();
-        sectionModeSelect.classList.add('active');
-        mainStepper.classList.add('hidden');
-        btnSwitchMode.classList.add('hidden');
+        if (sectionModeSelect) sectionModeSelect.classList.add('active');
+        if (mainStepper) mainStepper.classList.add('hidden');
+        if (btnSwitchMode) btnSwitchMode.classList.add('hidden');
     };
 
     const setStep = (stepNumber) => {
-        stepIndicator1.classList.remove('active');
-        stepIndicator2.classList.remove('active');
-        stepIndicator3.classList.remove('active');
+        if (stepIndicator1) stepIndicator1.classList.remove('active');
+        if (stepIndicator2) stepIndicator2.classList.remove('active');
+        if (stepIndicator3) stepIndicator3.classList.remove('active');
 
-        if (stepNumber >= 1) stepIndicator1.classList.add('active');
-        if (stepNumber >= 2) stepIndicator2.classList.add('active');
-        if (stepNumber >= 3) stepIndicator3.classList.add('active');
+        if (stepNumber >= 1 && stepIndicator1) stepIndicator1.classList.add('active');
+        if (stepNumber >= 2 && stepIndicator2) stepIndicator2.classList.add('active');
+        if (stepNumber >= 3 && stepIndicator3) stepIndicator3.classList.add('active');
     };
 
     const setupFileDropzone = (inputEl, labelEl, infoEl) => {
+        if (!inputEl || !labelEl || !infoEl) return;
+
         inputEl.addEventListener('change', () => {
             if (inputEl.files && inputEl.files[0]) {
                 infoEl.textContent = `✓ Selected: ${inputEl.files[0].name} (${(inputEl.files[0].size / 1024).toFixed(1)} KB)`;
@@ -134,42 +138,57 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    // Attach dropzones
+    // Attach dropzones safely
     setupFileDropzone(fontFileInput, fontDropzoneLabel, fontFileInfo);
     setupFileDropzone(zipFileInput, zipDropzoneLabel, zipFileInfo);
     setupFileDropzone(fontAInput, fontALabel, fontAInfo);
     setupFileDropzone(fontBInput, fontBLabel, fontBInfo);
 
-    // --- Mode Selection Click Handlers ---
-    cardMode1.addEventListener('click', () => {
+    // --- Mode Selection Handlers ---
+    const activateMode1 = (e) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         currentMode = 'mode1';
         hideAllSections();
-        sectionM1Upload.classList.add('active');
-        mainStepper.classList.remove('hidden');
-        btnSwitchMode.classList.remove('hidden');
+        if (sectionM1Upload) sectionM1Upload.classList.add('active');
+        if (mainStepper) mainStepper.classList.remove('hidden');
+        if (btnSwitchMode) btnSwitchMode.classList.remove('hidden');
 
-        step1Label.textContent = 'Upload Assets';
-        step2Label.textContent = 'Review & Naming';
+        if (step1Label) step1Label.textContent = 'Upload Assets';
+        if (step2Label) step2Label.textContent = 'Review & Naming';
         setStep(1);
-    });
+    };
 
-    cardMode2.addEventListener('click', () => {
+    const activateMode2 = (e) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         currentMode = 'mode2';
         hideAllSections();
-        sectionM2Upload.classList.add('active');
-        mainStepper.classList.remove('hidden');
-        btnSwitchMode.classList.remove('hidden');
+        if (sectionM2Upload) sectionM2Upload.classList.add('active');
+        if (mainStepper) mainStepper.classList.remove('hidden');
+        if (btnSwitchMode) btnSwitchMode.classList.remove('hidden');
 
-        step1Label.textContent = 'Upload Fonts';
-        step2Label.textContent = 'Merge & Naming';
+        if (step1Label) step1Label.textContent = 'Upload Fonts';
+        if (step2Label) step2Label.textContent = 'Merge & Naming';
         setStep(1);
-    });
+    };
 
-    btnSwitchMode.addEventListener('click', showModeSelection);
-    btnStartOver.addEventListener('click', showModeSelection);
+    if (cardMode1) cardMode1.addEventListener('click', activateMode1);
+    if (btnSelectMode1) btnSelectMode1.addEventListener('click', activateMode1);
+
+    if (cardMode2) cardMode2.addEventListener('click', activateMode2);
+    if (btnSelectMode2) btnSelectMode2.addEventListener('click', activateMode2);
+
+    if (btnSwitchMode) btnSwitchMode.addEventListener('click', showModeSelection);
+    if (btnStartOver) btnStartOver.addEventListener('click', showModeSelection);
 
     // Auto update Full Name when Family or Style input changes
     const setupAutoNaming = (familyInput, styleInput, fullInput) => {
+        if (!familyInput || !styleInput || !fullInput) return;
         const update = () => {
             const fam = familyInput.value.trim();
             const sty = styleInput.value.trim() || 'Regular';
@@ -185,59 +204,61 @@ document.addEventListener('DOMContentLoaded', () => {
     setupAutoNaming(m2FamilyName, m2StyleName, m2FullName);
 
     // --- Mode 1: Upload & OCR Review ---
-    m1UploadForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        if (!fontFileInput.files[0] || !zipFileInput.files[0]) {
-            alert('Please select both a base font file and a handwritten glyph ZIP archive.');
-            return;
-        }
-
-        btnM1Upload.disabled = true;
-        btnM1Upload.querySelector('span').textContent = 'Processing OCR...';
-
-        const formData = new FormData();
-        formData.append('font_file', fontFileInput.files[0]);
-        formData.append('zip_file', zipFileInput.files[0]);
-
-        try {
-            const response = await fetch('/api/upload', {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.detail || 'Upload failed');
+    if (m1UploadForm) {
+        m1UploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!fontFileInput.files[0] || !zipFileInput.files[0]) {
+                alert('Please select both a base font file and a handwritten glyph ZIP archive.');
+                return;
             }
 
-            const data = await response.json();
-            sessionUploadId = data.upload_id;
-            glyphData = data.glyphs;
+            btnM1Upload.disabled = true;
+            btnM1Upload.querySelector('span').textContent = 'Processing OCR...';
 
-            renderGlyphGrid(glyphData);
+            const formData = new FormData();
+            formData.append('font_file', fontFileInput.files[0]);
+            formData.append('zip_file', zipFileInput.files[0]);
 
-            // Default font family name suggestion from font filename
-            const baseFontBaseName = fontFileInput.files[0].name.replace(/\.[^/.]+$/, "");
-            m1FamilyName.value = `${baseFontBaseName} Handwritten`;
-            m1StyleName.value = "Regular";
-            m1FullName.value = `${baseFontBaseName} Handwritten Regular`;
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
 
-            hideAllSections();
-            sectionM1Review.classList.add('active');
-            setStep(2);
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || 'Upload failed');
+                }
 
-        } catch (err) {
-            alert(`Upload Error: ${err.message}`);
-        } finally {
-            btnM1Upload.disabled = false;
-            btnM1Upload.querySelector('span').textContent = 'Run OCR & Process Scans';
-        }
-    });
+                const data = await response.json();
+                sessionUploadId = data.upload_id;
+                glyphData = data.glyphs;
+
+                renderGlyphGrid(glyphData);
+
+                const baseFontBaseName = fontFileInput.files[0].name.replace(/\.[^/.]+$/, "");
+                if (m1FamilyName) m1FamilyName.value = `${baseFontBaseName} Handwritten`;
+                if (m1StyleName) m1StyleName.value = "Regular";
+                if (m1FullName) m1FullName.value = `${baseFontBaseName} Handwritten Regular`;
+
+                hideAllSections();
+                if (sectionM1Review) sectionM1Review.classList.add('active');
+                setStep(2);
+
+            } catch (err) {
+                alert(`Upload Error: ${err.message}`);
+            } finally {
+                btnM1Upload.disabled = false;
+                btnM1Upload.querySelector('span').textContent = 'Run OCR & Process Scans';
+            }
+        });
+    }
 
     const renderGlyphGrid = (glyphs) => {
+        if (!glyphGrid) return;
         glyphGrid.innerHTML = '';
-        totalGlyphsCount.textContent = glyphs.length;
+        if (totalGlyphsCount) totalGlyphsCount.textContent = glyphs.length;
 
         glyphs.forEach((item, index) => {
             const card = document.createElement('div');
@@ -267,6 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const attachGridInputEvents = () => {
+        if (!glyphGrid) return;
         const charInputs = glyphGrid.querySelectorAll('.glyph-char-input');
         charInputs.forEach(input => {
             input.addEventListener('input', (e) => {
@@ -282,6 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const validateDuplicates = () => {
+        if (!glyphGrid) return;
         const charCounts = {};
         glyphData.forEach(g => {
             const c = g.guessed_char;
@@ -305,155 +328,165 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        if (hasDuplicate) {
-            duplicateWarning.classList.remove('hidden');
-        } else {
-            duplicateWarning.classList.add('hidden');
+        if (duplicateWarning) {
+            if (hasDuplicate) {
+                duplicateWarning.classList.remove('hidden');
+            } else {
+                duplicateWarning.classList.add('hidden');
+            }
         }
     };
 
-    glyphFilterInput.addEventListener('input', (e) => {
-        const query = e.target.value.toLowerCase();
-        const cards = glyphGrid.querySelectorAll('.glyph-card');
-        
-        cards.forEach(card => {
-            const inputVal = card.querySelector('.glyph-char-input').value.toLowerCase();
-            const fileName = card.querySelector('.glyph-filename').textContent.toLowerCase();
+    if (glyphFilterInput) {
+        glyphFilterInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const cards = glyphGrid.querySelectorAll('.glyph-card');
             
-            if (!query || inputVal.includes(query) || fileName.includes(query)) {
-                card.style.display = 'flex';
-            } else {
-                card.style.display = 'none';
-            }
-        });
-    });
-
-    btnM1Back.addEventListener('click', () => {
-        hideAllSections();
-        sectionM1Upload.classList.add('active');
-        setStep(1);
-    });
-
-    btnM1Generate.addEventListener('click', async () => {
-        const validMappings = glyphData.filter(g => g.guessed_char && g.guessed_char.trim() !== '');
-        if (validMappings.length === 0) {
-            alert('Please specify at least one valid character mapping.');
-            return;
-        }
-
-        hideAllSections();
-        sectionDownload.classList.add('active');
-        setStep(3);
-
-        generationLoading.classList.remove('hidden');
-        generationSuccess.classList.add('hidden');
-
-        try {
-            const payload = {
-                upload_id: sessionUploadId,
-                mappings: glyphData.map(g => ({
-                    image_path: g.image_path,
-                    char: g.guessed_char
-                })),
-                metadata: {
-                    family_name: m1FamilyName.value.trim() || 'My Handwritten Font',
-                    style_name: m1StyleName.value.trim() || 'Regular',
-                    full_name: m1FullName.value.trim() || 'My Handwritten Font Regular'
+            cards.forEach(card => {
+                const inputVal = card.querySelector('.glyph-char-input').value.toLowerCase();
+                const fileName = card.querySelector('.glyph-filename').textContent.toLowerCase();
+                
+                if (!query || inputVal.includes(query) || fileName.includes(query)) {
+                    card.style.display = 'flex';
+                } else {
+                    card.style.display = 'none';
                 }
-            };
-
-            const response = await fetch('/api/generate-font', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
             });
+        });
+    }
 
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.detail || 'Font generation failed');
+    if (btnM1Back) {
+        btnM1Back.addEventListener('click', () => {
+            hideAllSections();
+            if (sectionM1Upload) sectionM1Upload.classList.add('active');
+            setStep(1);
+        });
+    }
+
+    if (btnM1Generate) {
+        btnM1Generate.addEventListener('click', async () => {
+            const validMappings = glyphData.filter(g => g.guessed_char && g.guessed_char.trim() !== '');
+            if (validMappings.length === 0) {
+                alert('Please specify at least one valid character mapping.');
+                return;
             }
 
-            const data = await response.json();
-            handleFontGenerationSuccess(data.download_url);
-
-        } catch (err) {
-            alert(`Font Generation Error: ${err.message}`);
             hideAllSections();
-            sectionM1Review.classList.add('active');
-            setStep(2);
-        }
-    });
-
-    // --- Mode 2: Font-to-Font Latin Replacement ---
-    m2UploadForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-
-        if (!fontAInput.files[0] || !fontBInput.files[0]) {
-            alert('Please select both Base Font A and Source Latin Font B.');
-            return;
-        }
-
-        btnM2Generate.disabled = true;
-        btnM2Generate.querySelector('span').textContent = 'Uploading Fonts...';
-
-        try {
-            const formData = new FormData();
-            formData.append('font_a', fontAInput.files[0]);
-            formData.append('font_b', fontBInput.files[0]);
-
-            const uploadRes = await fetch('/api/upload-font2font', {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!uploadRes.ok) {
-                const errData = await uploadRes.json();
-                throw new Error(errData.detail || 'Font upload failed');
-            }
-
-            const uploadData = await uploadRes.json();
-            sessionUploadId = uploadData.upload_id;
-
-            hideAllSections();
-            sectionDownload.classList.add('active');
+            if (sectionDownload) sectionDownload.classList.add('active');
             setStep(3);
 
-            generationLoading.classList.remove('hidden');
-            generationSuccess.classList.add('hidden');
+            if (generationLoading) generationLoading.classList.remove('hidden');
+            if (generationSuccess) generationSuccess.classList.add('hidden');
 
-            const payload = {
-                upload_id: sessionUploadId,
-                metadata: {
-                    family_name: m2FamilyName.value.trim() || 'Merged Latin Font',
-                    style_name: m2StyleName.value.trim() || 'Regular',
-                    full_name: m2FullName.value.trim() || 'Merged Latin Font Regular'
+            try {
+                const payload = {
+                    upload_id: sessionUploadId,
+                    mappings: glyphData.map(g => ({
+                        image_path: g.image_path,
+                        char: g.guessed_char
+                    })),
+                    metadata: {
+                        family_name: m1FamilyName ? m1FamilyName.value.trim() || 'My Handwritten Font' : 'My Handwritten Font',
+                        style_name: m1StyleName ? m1StyleName.value.trim() || 'Regular' : 'Regular',
+                        full_name: m1FullName ? m1FullName.value.trim() || 'My Handwritten Font Regular' : 'My Handwritten Font Regular'
+                    }
+                };
+
+                const response = await fetch('/api/generate-font', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || 'Font generation failed');
                 }
-            };
 
-            const genRes = await fetch('/api/generate-font2font', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+                const data = await response.json();
+                handleFontGenerationSuccess(data.download_url);
 
-            if (!genRes.ok) {
-                const errData = await genRes.json();
-                throw new Error(errData.detail || 'Font merge failed');
+            } catch (err) {
+                alert(`Font Generation Error: ${err.message}`);
+                hideAllSections();
+                if (sectionM1Review) sectionM1Review.classList.add('active');
+                setStep(2);
+            }
+        });
+    }
+
+    // --- Mode 2: Font-to-Font Latin Replacement ---
+    if (m2UploadForm) {
+        m2UploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (!fontAInput.files[0] || !fontBInput.files[0]) {
+                alert('Please select both Base Font A and Source Latin Font B.');
+                return;
             }
 
-            const genData = await genRes.json();
-            handleFontGenerationSuccess(genData.download_url);
+            btnM2Generate.disabled = true;
+            btnM2Generate.querySelector('span').textContent = 'Uploading Fonts...';
 
-        } catch (err) {
-            alert(`Font Merge Error: ${err.message}`);
-            hideAllSections();
-            sectionM2Upload.classList.add('active');
-            setStep(1);
-        } finally {
-            btnM2Generate.disabled = false;
-            btnM2Generate.querySelector('span').textContent = 'Match & Merge Fonts';
-        }
-    });
+            try {
+                const formData = new FormData();
+                formData.append('font_a', fontAInput.files[0]);
+                formData.append('font_b', fontBInput.files[0]);
+
+                const uploadRes = await fetch('/api/upload-font2font', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!uploadRes.ok) {
+                    const errData = await uploadRes.json();
+                    throw new Error(errData.detail || 'Font upload failed');
+                }
+
+                const uploadData = await uploadRes.json();
+                sessionUploadId = uploadData.upload_id;
+
+                hideAllSections();
+                if (sectionDownload) sectionDownload.classList.add('active');
+                setStep(3);
+
+                if (generationLoading) generationLoading.classList.remove('hidden');
+                if (generationSuccess) generationSuccess.classList.add('hidden');
+
+                const payload = {
+                    upload_id: sessionUploadId,
+                    metadata: {
+                        family_name: m2FamilyName ? m2FamilyName.value.trim() || 'Merged Latin Font' : 'Merged Latin Font',
+                        style_name: m2StyleName ? m2StyleName.value.trim() || 'Regular' : 'Regular',
+                        full_name: m2FullName ? m2FullName.value.trim() || 'Merged Latin Font Regular' : 'Merged Latin Font Regular'
+                    }
+                };
+
+                const genRes = await fetch('/api/generate-font2font', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!genRes.ok) {
+                    const errData = await genRes.json();
+                    throw new Error(errData.detail || 'Font merge failed');
+                }
+
+                const genData = await genRes.json();
+                handleFontGenerationSuccess(genData.download_url);
+
+            } catch (err) {
+                alert(`Font Merge Error: ${err.message}`);
+                hideAllSections();
+                if (sectionM2Upload) sectionM2Upload.classList.add('active');
+                setStep(1);
+            } finally {
+                btnM2Generate.disabled = false;
+                btnM2Generate.querySelector('span').textContent = 'Match & Merge Fonts';
+            }
+        });
+    }
 
     // --- Common Download & Preview Handler ---
     const handleFontGenerationSuccess = async (downloadUrl) => {
@@ -463,14 +496,14 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             await newFontFace.load();
             document.fonts.add(newFontFace);
-            fontPreviewInput.style.fontFamily = `'${fontName}', var(--font-sans)`;
+            if (fontPreviewInput) fontPreviewInput.style.fontFamily = `'${fontName}', var(--font-sans)`;
         } catch (e) {
             console.warn('Browser font preview load error:', e);
         }
 
-        btnDownloadFont.href = downloadUrl;
+        if (btnDownloadFont) btnDownloadFont.href = downloadUrl;
 
-        generationLoading.classList.add('hidden');
-        generationSuccess.classList.remove('hidden');
+        if (generationLoading) generationLoading.classList.add('hidden');
+        if (generationSuccess) generationSuccess.classList.remove('hidden');
     };
 });

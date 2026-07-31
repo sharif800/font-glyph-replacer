@@ -75,7 +75,7 @@
                     <h3>Option 1: Handwritten Scanned Images Replacer</h3>
                     <p>Upload a base font file and a ZIP of scanned handwritten image letters. Tesseract OCR will auto-detect letters, vectorize images via Potrace, and replace Unicode slots in FontForge.</p>
                     <div class="mode-badge">Base Font + Images ZIP</div>
-                    <button class="btn btn-primary btn-block mt-auto">Select Option 1</button>
+                    <button type="button" class="btn btn-primary btn-block mt-auto" id="btn-select-mode-1">Select Option 1</button>
                 </div>
 
                 <!-- Option 2 Card -->
@@ -91,9 +91,10 @@
                     <h3>Option 2: Font-to-Font Latin Replacer</h3>
                     <p>Upload two fonts (Base Font A & Source Font B). Automatically match, extract, and replace all Latin glyphs (A-Z, a-z, 0-9, punctuation) from Font B into Font A to create a unified new version.</p>
                     <div class="mode-badge accent">Base Font A + Source Font B</div>
-                    <button class="btn btn-accent btn-block mt-auto">Select Option 2</button>
+                    <button type="button" class="btn btn-accent btn-block mt-auto" id="btn-select-mode-2">Select Option 2</button>
                 </div>
             </div>
+
         </section>
 
         <!-- Stepper Bar (Hidden during Mode Selection) -->
@@ -413,6 +414,7 @@
     </main>
 
     <!-- JS -->
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=2.1"></script>
 </body>
 </html>
+
