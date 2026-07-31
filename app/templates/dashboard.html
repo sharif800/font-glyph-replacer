@@ -25,7 +25,7 @@
                 </svg>
             </div>
             <span class="brand-title">Font Synthesis Studio</span>
-            <span class="badge badge-accent">v3.1</span>
+            <span class="badge badge-accent">v3.3</span>
         </div>
 
         <div class="nav-actions">
@@ -445,7 +445,7 @@
             <div class="card-header flex-between">
                 <div>
                     <h2>Superimposition & Calibration Studio</h2>
-                    <p>Font A is rendered in ghost blue (<span style="color:#6366f1;font-weight:600;">Font A Reference</span>). Font B is rendered in vibrant pink (<span style="color:#ec4899;font-weight:600;">Font B Candidate</span>). Adjust sliders to superimpose Font B over Font A.</p>
+                    <p>Font A is rendered in ghost blue (<span style="color:#6366f1;font-weight:600;">Font A Reference</span>). Font B is rendered in vibrant pink (<span style="color:#ec4899;font-weight:600;">Font B Candidate</span>). Use viewport controls to zoom or pan, and sliders to superimpose Font B over Font A.</p>
                 </div>
                 <div class="review-stats-badge cyan">
                     <span id="selected-unicodes-count">0</span> Characters Active
@@ -454,7 +454,7 @@
 
             <!-- Main Studio Split View -->
             <div class="studio-layout">
-                <!-- Left: Superimposition SVG Overlay Canvas -->
+                <!-- Left: Superimposition SVG Overlay Canvas & Viewport Nav Toolbar -->
                 <div class="canvas-panel">
                     <div class="canvas-header flex-between">
                         <div class="canvas-title">
@@ -463,6 +463,22 @@
                         <div class="canvas-legend">
                             <span class="legend-item legend-a">Font A Silhouette</span>
                             <span class="legend-item legend-b">Font B Overlay</span>
+                        </div>
+                    </div>
+
+                    <!-- Viewport Navigation & Zoom Toolbar -->
+                    <div class="viewport-nav-toolbar">
+                        <div class="viewport-group">
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-zoom-out" title="Zoom Out (View Entire Area)">🔍- Zoom Out</button>
+                            <span class="viewport-readout" id="zoom-readout">100%</span>
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-zoom-in" title="Zoom In (Close Up)">🔍+ Zoom In</button>
+                        </div>
+                        <div class="viewport-group">
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-pan-up" title="Move Viewport Up">⬆️ Up</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-pan-down" title="Move Viewport Down">⬇️ Down</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-pan-left" title="Move Viewport Left">⬅️ Left</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-pan-right" title="Move Viewport Right">➡️ Right</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-reset-viewport" title="Reset Zoom & Pan">🔄 Reset View</button>
                         </div>
                     </div>
 
@@ -509,7 +525,7 @@
                                 <label for="slider-x-off">Startline X-Offset (Horiz Shift)</label>
                                 <span class="slider-value" id="val-x-off">0 px</span>
                             </div>
-                            <input type="range" id="slider-x-off" min="-150" max="150" value="0" class="slider-control">
+                            <input type="range" id="slider-x-off" min="-300" max="300" value="0" class="slider-control">
                         </div>
 
                         <!-- Baseline Y-Offset Slider -->
@@ -518,7 +534,7 @@
                                 <label for="slider-y-off">Baseline Y-Offset (Vert Shift)</label>
                                 <span class="slider-value" id="val-y-off">0 px</span>
                             </div>
-                            <input type="range" id="slider-y-off" min="-150" max="150" value="0" class="slider-control">
+                            <input type="range" id="slider-y-off" min="-300" max="300" value="0" class="slider-control">
                         </div>
 
                         <div class="control-button-grid">
@@ -640,6 +656,6 @@
     </main>
 
     <!-- JS -->
-    <script src="/static/app.js?v=3.2"></script>
+    <script src="/static/app.js?v=3.3"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 /**
- * Handwritten & Latin Font Replacer Studio - Frontend Logic (v3.2)
+ * Handwritten & Latin Font Replacer Studio - Frontend Logic (v3.3)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -11,6 +11,14 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedUnicodes = new Set();
     let calibrations = {}; // Map: ucode -> { scale: 1.0, x_offset: 0.0, y_offset: 0.0 }
     let activeStudioUcode = 65; // Default 'A'
+
+    // Viewport Pan & Zoom State
+    let viewportZoom = 1.0;  // Range: 0.3 to 3.0
+    let viewportPanX = 0.0;
+    let viewportPanY = 0.0;
+    let isDraggingCanvas = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
 
     // --- DOM Elements ---
     const btnSwitchMode = document.getElementById('btn-switch-mode');
@@ -94,6 +102,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const charSelectDropdown = document.getElementById('char-select-dropdown');
     const replaceCharCheckbox = document.getElementById('replace-char-checkbox');
 
+    // Viewport Nav Toolbar Elements
+    const btnZoomOut = document.getElementById('btn-zoom-out');
+    const btnZoomIn = document.getElementById('btn-zoom-in');
+    const zoomReadout = document.getElementById('zoom-readout');
+    const btnPanUp = document.getElementById('btn-pan-up');
+    const btnPanDown = document.getElementById('btn-pan-down');
+    const btnPanLeft = document.getElementById('btn-pan-left');
+    const btnPanRight = document.getElementById('btn-pan-right');
+    const btnResetViewport = document.getElementById('btn-reset-viewport');
+
     const sliderScale = document.getElementById('slider-scale');
     const sliderXOff = document.getElementById('slider-x-off');
     const sliderYOff = document.getElementById('slider-y-off');
@@ -143,6 +161,9 @@ document.addEventListener('DOMContentLoaded', () => {
         matrixData = [];
         calibrations = {};
         selectedUnicodes.clear();
+        viewportZoom = 1.0;
+        viewportPanX = 0.0;
+        viewportPanY = 0.0;
         hideAllSections();
         if (sectionModeSelect) sectionModeSelect.classList.add('active');
         if (mainStepper) mainStepper.classList.add('hidden');
@@ -258,9 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const update = () => {
             const fam = familyInput.value.trim();
             const sty = styleInput.value.trim() || 'Regular';
-            if (fam) {
-                fullInput.value = `${fam} ${sty}`;
-            }
+            if (fam) fullInput.value = `${fam} ${sty}`;
         };
         familyInput.addEventListener('input', update);
         styleInput.addEventListener('input', update);
@@ -558,6 +577,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 selectedUnicodes.clear();
                 calibrations = {};
+                viewportZoom = 1.0;
+                viewportPanX = 0.0;
+                viewportPanY = 0.0;
 
                 matrixData.forEach(item => {
                     if (item.exists_b) {
@@ -569,7 +591,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 populateCharacterDropdown(matrixData);
                 renderMatrixGrid(matrixData);
 
-                // Set initial active studio character to U+0041 ('A') if available
                 const firstAvailable = matrixData.find(i => i.exists_b);
                 activeStudioUcode = firstAvailable ? firstAvailable.unicode : 65;
                 if (charSelectDropdown) charSelectDropdown.value = activeStudioUcode;
@@ -616,7 +637,91 @@ document.addEventListener('DOMContentLoaded', () => {
         return '';
     };
 
-    // Render Superimposition SVG Canvas with 100% Centered Baseline Alignment
+    // Viewport Pan & Zoom Controls Event Listeners
+    if (btnZoomOut) {
+        btnZoomOut.addEventListener('click', () => {
+            viewportZoom = Math.max(0.3, viewportZoom - 0.25);
+            renderSuperimpositionStudio(activeStudioUcode);
+        });
+    }
+
+    if (btnZoomIn) {
+        btnZoomIn.addEventListener('click', () => {
+            viewportZoom = Math.min(3.0, viewportZoom + 0.25);
+            renderSuperimpositionStudio(activeStudioUcode);
+        });
+    }
+
+    if (btnPanUp) {
+        btnPanUp.addEventListener('click', () => {
+            viewportPanY -= 120 / viewportZoom;
+            renderSuperimpositionStudio(activeStudioUcode);
+        });
+    }
+
+    if (btnPanDown) {
+        btnPanDown.addEventListener('click', () => {
+            viewportPanY += 120 / viewportZoom;
+            renderSuperimpositionStudio(activeStudioUcode);
+        });
+    }
+
+    if (btnPanLeft) {
+        btnPanLeft.addEventListener('click', () => {
+            viewportPanX -= 120 / viewportZoom;
+            renderSuperimpositionStudio(activeStudioUcode);
+        });
+    }
+
+    if (btnPanRight) {
+        btnPanRight.addEventListener('click', () => {
+            viewportPanX += 120 / viewportZoom;
+            renderSuperimpositionStudio(activeStudioUcode);
+        });
+    }
+
+    if (btnResetViewport) {
+        btnResetViewport.addEventListener('click', () => {
+            viewportZoom = 1.0;
+            viewportPanX = 0.0;
+            viewportPanY = 0.0;
+            renderSuperimpositionStudio(activeStudioUcode);
+        });
+    }
+
+    // Mouse Drag-to-Pan & Wheel Zoom on Canvas
+    if (superimposeCanvasBox) {
+        superimposeCanvasBox.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY < 0 ? 0.15 : -0.15;
+            viewportZoom = Math.min(3.0, Math.max(0.3, viewportZoom + delta));
+            renderSuperimpositionStudio(activeStudioUcode);
+        }, { passive: false });
+
+        superimposeCanvasBox.addEventListener('mousedown', (e) => {
+            isDraggingCanvas = true;
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDraggingCanvas) return;
+            const dx = e.clientX - dragStartX;
+            const dy = e.clientY - dragStartY;
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+
+            viewportPanX -= dx * (1.2 / viewportZoom);
+            viewportPanY -= dy * (1.2 / viewportZoom);
+            renderSuperimpositionStudio(activeStudioUcode);
+        });
+
+        window.addEventListener('mouseup', () => {
+            isDraggingCanvas = false;
+        });
+    }
+
+    // Render Superimposition SVG Canvas with Dynamic Viewport Pan & Zoom
     const renderSuperimpositionStudio = (ucode) => {
         activeStudioUcode = ucode;
         const item = matrixData.find(i => i.unicode === ucode);
@@ -625,6 +730,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (activeCharDisplay) activeCharDisplay.textContent = item.char;
         if (charSelectDropdown) charSelectDropdown.value = ucode;
         if (replaceCharCheckbox) replaceCharCheckbox.checked = selectedUnicodes.has(ucode);
+
+        if (zoomReadout) zoomReadout.textContent = `${Math.round(viewportZoom * 100)}%`;
 
         // Fetch or init calibration state
         if (!calibrations[ucode]) {
@@ -646,31 +753,33 @@ document.addEventListener('DOMContentLoaded', () => {
         let pathAData = extractSvgPathD(item.svg_a);
         let pathBData = extractSvgPathD(item.svg_b);
 
-        // Perfect Canvas Centering Math:
-        // SVG ViewBox: 0 0 1000 1000
-        // Baseline (y=0 in FontForge) maps to SVG Y = 750 (leaving 250px below for descenders!).
-        // Startline (x=0 in FontForge) maps to SVG X = 200 (leaving 200px left margin!).
-        // Cap-Height (y=700 in FontForge) maps to SVG Y = 750 - 700 = 50 (50px top margin!).
-        // X-Height (y=480 in FontForge) maps to SVG Y = 750 - 480 = 270.
+        // Dynamic Viewport Pan & Zoom ViewBox Math:
+        const baseWidth = 1000.0;
+        const baseHeight = 1000.0;
+        const widthVb = baseWidth / viewportZoom;
+        const heightVb = baseHeight / viewportZoom;
+        const minXVb = (baseWidth - widthVb) / 2.0 + viewportPanX;
+        const minYVb = (baseHeight - heightVb) / 2.0 + viewportPanY;
+        const viewBoxStr = `${minXVb} ${minYVb} ${widthVb} ${heightVb}`;
 
         const svgContent = `
-            <svg viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;background:#03050a;">
+            <svg viewBox="${viewBoxStr}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;background:#03050a;">
                 <!-- Typographic Reference Guide Lines -->
                 <!-- Baseline (Y=750 in SVG space) -->
-                <line x1="0" y1="750" x2="1000" y2="750" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6" />
-                <text x="20" y="740" fill="#94a3b8" font-size="20" font-family="sans-serif">Baseline (y=0)</text>
+                <line x1="-2000" y1="750" x2="3000" y2="750" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6" />
+                <text x="20" y="740" fill="#94a3b8" font-size="22" font-family="sans-serif">Baseline (y=0)</text>
 
                 <!-- Cap-Height (Y=50 in SVG space) -->
-                <line x1="0" y1="50" x2="1000" y2="50" stroke="#6366f1" stroke-width="2" stroke-dasharray="6 6" />
-                <text x="20" y="40" fill="#6366f1" font-size="20" font-family="sans-serif">Cap-Height (y=700)</text>
+                <line x1="-2000" y1="50" x2="3000" y2="50" stroke="#6366f1" stroke-width="2" stroke-dasharray="6 6" />
+                <text x="20" y="40" fill="#6366f1" font-size="22" font-family="sans-serif">Cap-Height (y=700)</text>
 
                 <!-- X-Height (Y=270 in SVG space) -->
-                <line x1="0" y1="270" x2="1000" y2="270" stroke="#10b981" stroke-width="2" stroke-dasharray="6 6" />
-                <text x="20" y="260" fill="#10b981" font-size="20" font-family="sans-serif">X-Height (y=480)</text>
+                <line x1="-2000" y1="270" x2="3000" y2="270" stroke="#10b981" stroke-width="2" stroke-dasharray="6 6" />
+                <text x="20" y="260" fill="#10b981" font-size="22" font-family="sans-serif">X-Height (y=480)</text>
 
                 <!-- Startline Left Bearing (X=200 in SVG space) -->
-                <line x1="200" y1="0" x2="200" y2="1000" stroke="#8b5cf6" stroke-width="2" stroke-dasharray="6 6" />
-                <text x="210" y="980" fill="#8b5cf6" font-size="20" font-family="sans-serif">Startline</text>
+                <line x1="200" y1="-2000" x2="200" y2="3000" stroke="#8b5cf6" stroke-width="2" stroke-dasharray="6 6" />
+                <text x="210" y="980" fill="#8b5cf6" font-size="22" font-family="sans-serif">Startline</text>
 
                 <!-- Font A Ghost Reference Silhouette (Blue) -->
                 ${pathAData ? `
