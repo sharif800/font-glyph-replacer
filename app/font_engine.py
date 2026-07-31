@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 import re
 import base64
+import json
 from io import BytesIO
 from PIL import Image, ImageOps
 
@@ -52,15 +53,12 @@ def convert_image_to_svg(image_path: str, svg_output_path: str) -> bool:
             threshold = 180
             binary = gray.point(lambda p: 255 if p > threshold else 0)
             
-            # Check corner pixel color to determine background
             corner_val = binary.getpixel((0, 0))
-            if corner_val == 0:  # Dark background
+            if corner_val == 0:
                 binary = ImageOps.invert(binary)
                 
             bw = binary.convert('1')
             
-            # Detect exact ink stroke bounding box
-            # Invert so ink strokes are white (255) for getbbox()
             inv_bw = ImageOps.invert(bw)
             ink_bbox = inv_bw.getbbox()
             
@@ -68,7 +66,6 @@ def convert_image_to_svg(image_path: str, svg_output_path: str) -> bool:
                 left, top, right, bottom = ink_bbox
                 width, height = bw.size
                 
-                # Add 5% padding around ink bbox
                 pad_x = int((right - left) * 0.05) + 2
                 pad_y = int((bottom - top) * 0.05) + 2
                 
@@ -154,7 +151,7 @@ def generate_font_with_fontforge_python(base_font_path: str, char_svg_mappings: 
                 else:
                     target_height = em_size * 0.52
                     target_ymin = 0.0
-            else:  # Uppercase A-Z, Digits 0-9, Punctuation
+            else:
                 target_height = em_size * 0.70
                 target_ymin = 0.0
 
@@ -315,8 +312,6 @@ def process_and_build_font(base_font_path: str, mappings: list[dict], metadata: 
         
     return output_font_path
 
-# --- Mode 2 & Mode 3 Engines ---
-
 def merge_latin_fonts_with_fontforge_python(base_font_a_path: str, source_font_b_path: str, metadata: dict, output_font_path: str):
     import fontforge
 
@@ -404,23 +399,28 @@ def merge_latin_fonts(base_font_a_path: str, source_font_b_path: str, metadata: 
 
     return output_font_path
 
-# --- Option 3: Selective Font-to-Font Latin Replacer & Inspection ---
+# --- Option 3: Superimposition Inspection & Calibrated Selective Merge ---
 
 def inspect_latin_glyphs_comparison(font_a_path: str, font_b_path: str) -> list[dict]:
     """
-    Inspects Font A and Font B for Latin characters (U+0020 to U+007E)
-    and returns metadata list for side-by-side matrix comparison.
+    Inspects Font A and Font B for Latin characters (U+0021 to U+007E).
+    Exports vector SVG outline data for both Font A and Font B to enable live superimposition rendering.
     """
     results = []
-    latin_unicodes = range(0x0021, 0x007F)  # Printable characters
+    temp_dir = tempfile.mkdtemp(prefix="font_inspect_")
 
-    # Use inline script or direct fontforge to extract glyph presence & character labels
-    import json
     script_content = f"""
-import fontforge, sys, json
+import fontforge, sys, json, os, re
 
-font_a = fontforge.open(sys.argv[1])
-font_b = fontforge.open(sys.argv[2])
+font_a_path = sys.argv[1]
+font_b_path = sys.argv[2]
+temp_dir = sys.argv[3]
+
+font_a = fontforge.open(font_a_path)
+font_b = fontforge.open(font_b_path)
+
+em_size_a = font_a.em if font_a.em > 0 else 1000
+em_size_b = font_b.em if font_b.em > 0 else 1000
 
 results = []
 for ucode in range(0x0021, 0x007F):
@@ -428,16 +428,42 @@ for ucode in range(0x0021, 0x007F):
     exists_a = ucode in font_a
     exists_b = ucode in font_b
     
+    bbox_a = list(font_a[ucode].boundingBox()) if exists_a else [0, 0, 0, 0]
+    bbox_b = list(font_b[ucode].boundingBox()) if exists_b else [0, 0, 0, 0]
+    
     width_a = font_a[ucode].width if exists_a else 0
     width_b = font_b[ucode].width if exists_b else 0
     
+    svg_path_a = ""
+    svg_path_b = ""
+    
+    if exists_a:
+        fa_file = os.path.join(temp_dir, "fa_%d.svg" % ucode)
+        font_a[ucode].export(fa_file)
+        if os.path.exists(fa_file):
+            with open(fa_file, "r") as f:
+                svg_path_a = f.read()
+                
+    if exists_b:
+        fb_file = os.path.join(temp_dir, "fb_%d.svg" % ucode)
+        font_b[ucode].export(fb_file)
+        if os.path.exists(fb_file):
+            with open(fb_file, "r") as f:
+                svg_path_b = f.read()
+                
     results.append({{
         "unicode": ucode,
         "char": char,
         "exists_a": exists_a,
         "exists_b": exists_b,
         "width_a": width_a,
-        "width_b": width_b
+        "width_b": width_b,
+        "bbox_a": bbox_a,
+        "bbox_b": bbox_b,
+        "em_size_a": em_size_a,
+        "em_size_b": em_size_b,
+        "svg_a": svg_path_a,
+        "svg_b": svg_path_b
     }})
 
 font_a.close()
@@ -449,7 +475,7 @@ print(json.dumps(results))
         temp_script = f.name
 
     try:
-        cmd = ["fontforge", "-script", temp_script, font_a_path, font_b_path]
+        cmd = ["fontforge", "-script", temp_script, font_a_path, font_b_path, temp_dir]
         res = subprocess.run(cmd, capture_output=True, text=True)
         if res.returncode == 0:
             results = json.loads(res.stdout.strip())
@@ -460,10 +486,12 @@ print(json.dumps(results))
     finally:
         if os.path.exists(temp_script):
             os.remove(temp_script)
+        import shutil
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
     return results
 
-def selective_merge_latin_fonts_with_fontforge_python(base_font_a_path: str, source_font_b_path: str, selected_unicodes: list[int], metadata: dict, output_font_path: str):
+def selective_merge_latin_fonts_with_fontforge_python(base_font_a_path: str, source_font_b_path: str, selected_unicodes: list[int], calibrations: dict, metadata: dict, output_font_path: str):
     import fontforge
 
     font_a = fontforge.open(base_font_a_path)
@@ -478,8 +506,18 @@ def selective_merge_latin_fonts_with_fontforge_python(base_font_a_path: str, sou
             font_a.selection.select(ucode)
             font_a.paste()
             
-            # Auto-Center horizontally and preserve side bearings
             glyph = font_a[ucode]
+            
+            # Apply user visual calibration parameters (Scale, X-Offset, Y-Offset)
+            calib = calibrations.get(str(ucode)) or calibrations.get(ucode) or {}
+            scale = float(calib.get("scale", 1.0))
+            x_off = float(calib.get("x_offset", 0.0))
+            y_off = float(calib.get("y_offset", 0.0))
+            
+            if scale != 1.0 or x_off != 0.0 or y_off != 0.0:
+                glyph.transform((scale, 0, 0, scale, x_off, y_off))
+            
+            # Adjust side bearings / startline alignment
             bbox = glyph.boundingBox()
             if bbox and (bbox[2] - bbox[0] > 0):
                 glyph_w = bbox[2] - bbox[0]
@@ -493,7 +531,7 @@ def selective_merge_latin_fonts_with_fontforge_python(base_font_a_path: str, sou
     font_a.close()
     font_b.close()
 
-def selective_merge_latin_fonts_via_subprocess(base_font_a_path: str, source_font_b_path: str, selected_unicodes: list[int], metadata: dict, output_font_path: str):
+def selective_merge_latin_fonts_via_subprocess(base_font_a_path: str, source_font_b_path: str, selected_unicodes: list[int], calibrations: dict, metadata: dict, output_font_path: str):
     script_content = f"""
 import fontforge, sys, json, re
 
@@ -501,7 +539,8 @@ font_a_path = sys.argv[1]
 font_b_path = sys.argv[2]
 output_path = sys.argv[3]
 selected_unicodes = json.loads(sys.argv[4])
-metadata = json.loads(sys.argv[5])
+calibrations = json.loads(sys.argv[5])
+metadata = json.loads(sys.argv[6])
 
 font_a = fontforge.open(font_a_path)
 font_b = fontforge.open(font_b_path)
@@ -516,6 +555,14 @@ for ucode in selected_unicodes:
         font_a.paste()
         
         glyph = font_a[ucode]
+        calib = calibrations.get(str(ucode)) or calibrations.get(ucode) or {{}}
+        scale = float(calib.get("scale", 1.0))
+        x_off = float(calib.get("x_offset", 0.0))
+        y_off = float(calib.get("y_offset", 0.0))
+        
+        if scale != 1.0 or x_off != 0.0 or y_off != 0.0:
+            glyph.transform((scale, 0, 0, scale, x_off, y_off))
+            
         bbox = glyph.boundingBox()
         if bbox and (bbox[2] - bbox[0] > 0):
             glyph_w = bbox[2] - bbox[0]
@@ -546,7 +593,7 @@ font_b.close()
 
     try:
         import json
-        cmd = ["fontforge", "-script", temp_script, base_font_a_path, source_font_b_path, output_font_path, json.dumps(selected_unicodes), json.dumps(metadata)]
+        cmd = ["fontforge", "-script", temp_script, base_font_a_path, source_font_b_path, output_font_path, json.dumps(selected_unicodes), json.dumps(calibrations), json.dumps(metadata)]
         res = subprocess.run(cmd, capture_output=True, text=True)
         if res.returncode != 0:
             raise RuntimeError(f"FontForge selective merge execution failed: {res.stderr}")
@@ -554,13 +601,13 @@ font_b.close()
         if os.path.exists(temp_script):
             os.remove(temp_script)
 
-def selective_merge_latin_fonts(base_font_a_path: str, source_font_b_path: str, selected_unicodes: list[int], metadata: dict, output_dir: str) -> str:
+def selective_merge_latin_fonts(base_font_a_path: str, source_font_b_path: str, selected_unicodes: list[int], calibrations: dict, metadata: dict, output_dir: str) -> str:
     os.makedirs(output_dir, exist_ok=True)
     output_font_path = os.path.join(output_dir, "selective_latin_font.ttf")
 
     try:
-        selective_merge_latin_fonts_with_fontforge_python(base_font_a_path, source_font_b_path, selected_unicodes, metadata, output_font_path)
+        selective_merge_latin_fonts_with_fontforge_python(base_font_a_path, source_font_b_path, selected_unicodes, calibrations, metadata, output_font_path)
     except ImportError:
-        selective_merge_latin_fonts_via_subprocess(base_font_a_path, source_font_b_path, selected_unicodes, metadata, output_font_path)
+        selective_merge_latin_fonts_via_subprocess(base_font_a_path, source_font_b_path, selected_unicodes, calibrations, metadata, output_font_path)
 
     return output_font_path

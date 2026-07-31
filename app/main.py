@@ -3,7 +3,7 @@ import shutil
 import uuid
 import logging
 import traceback
-from typing import List
+from typing import List, Dict, Any
 from fastapi import FastAPI, Request, Form, UploadFile, File, HTTPException, Depends, status
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -22,9 +22,9 @@ logging.basicConfig(
 logger = logging.getLogger("font_replacer")
 
 app = FastAPI(
-    title="Handwritten & Latin Font Replacer Studio",
+    title="Font Synthesis Studio",
     description="Automated font glyph replacer using Tesseract OCR, Potrace, and FontForge.",
-    version="3.0.0"
+    version="3.1.0"
 )
 
 @app.exception_handler(Exception)
@@ -59,9 +59,15 @@ class GenerateFont2FontRequest(BaseModel):
     upload_id: str
     metadata: FontMetadata = FontMetadata()
 
+class GlyphCalibration(BaseModel):
+    scale: float = 1.0
+    x_offset: float = 0.0
+    y_offset: float = 0.0
+
 class GenerateSelectiveFontRequest(BaseModel):
     upload_id: str
     selected_unicodes: List[int]
+    calibrations: Dict[str, GlyphCalibration] = {}
     metadata: FontMetadata = FontMetadata()
 
 # --- Auth Routes ---
@@ -253,7 +259,7 @@ async def handle_generate_font2font(request: Request, body: GenerateFont2FontReq
         "download_url": f"/api/download-font/{body.upload_id}"
     }
 
-# --- Option 3 API: Selective Latin Replacement & Matrix Inspection ---
+# --- Option 3 API: Superimposition Inspection & Calibrated Selective Replacement ---
 
 @app.post("/api/upload-font2font-selective")
 async def handle_upload_font2font_selective(
@@ -312,6 +318,8 @@ async def handle_generate_font2font_selective(request: Request, body: GenerateSe
         raise HTTPException(status_code=400, detail="Missing source or base font in session")
 
     metadata_dict = body.metadata.model_dump() if hasattr(body.metadata, 'model_dump') else body.metadata.dict()
+    calib_dict = {k: (v.model_dump() if hasattr(v, 'model_dump') else v.dict()) for k, v in body.calibrations.items()}
+
     output_dir = os.path.join(session_dir, "output")
 
     try:
@@ -319,6 +327,7 @@ async def handle_generate_font2font_selective(request: Request, body: GenerateSe
             font_a_path,
             font_b_path,
             body.selected_unicodes,
+            calib_dict,
             metadata_dict,
             output_dir
         )

@@ -1,5 +1,5 @@
 /**
- * Handwritten & Latin Font Replacer Studio - Frontend Logic
+ * Handwritten & Latin Font Replacer Studio - Frontend Logic (v3.1)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -9,6 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let glyphData = [];
     let matrixData = [];
     let selectedUnicodes = new Set();
+    let calibrations = {}; // Map: ucode -> { scale: 1.0, x_offset: 0.0, y_offset: 0.0 }
+    let activeStudioUcode = 65; // Default 'A'
 
     // --- DOM Elements ---
     const btnSwitchMode = document.getElementById('btn-switch-mode');
@@ -86,6 +88,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const fontB3Info = document.getElementById('font-b3-info');
     const btnM3Inspect = document.getElementById('btn-m3-inspect');
 
+    // Studio Canvas & Controls Elements
+    const superimposeCanvasBox = document.getElementById('superimpose-canvas-box');
+    const activeCharDisplay = document.getElementById('active-char-display');
+    const charSelectDropdown = document.getElementById('char-select-dropdown');
+    const replaceCharCheckbox = document.getElementById('replace-char-checkbox');
+
+    const sliderScale = document.getElementById('slider-scale');
+    const sliderXOff = document.getElementById('slider-x-off');
+    const sliderYOff = document.getElementById('slider-y-off');
+    const valScale = document.getElementById('val-scale');
+    const valXOff = document.getElementById('val-x-off');
+    const valYOff = document.getElementById('val-y-off');
+
+    const btnAutoCenter = document.getElementById('btn-auto-center');
+    const btnApplyAll = document.getElementById('btn-apply-all');
+    const btnResetCurrent = document.getElementById('btn-reset-current');
+
     const matrixGrid = document.getElementById('matrix-grid');
     const matrixFilterInput = document.getElementById('matrix-filter');
     const selectedUnicodesCount = document.getElementById('selected-unicodes-count');
@@ -122,6 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionUploadId = null;
         glyphData = [];
         matrixData = [];
+        calibrations = {};
         selectedUnicodes.clear();
         hideAllSections();
         if (sectionModeSelect) sectionModeSelect.classList.add('active');
@@ -217,7 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnSwitchMode) btnSwitchMode.classList.remove('hidden');
 
         if (step1Label) step1Label.textContent = 'Upload Fonts';
-        if (step2Label) step2Label.textContent = 'Matrix Comparison';
+        if (step2Label) step2Label.textContent = 'Superimpose & Calibrate';
         setStep(1);
     };
 
@@ -253,10 +273,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Toolbar Case Conversion Buttons (Mode 1)
     if (btnConvertLowercase) {
         btnConvertLowercase.addEventListener('click', () => {
-            glyphData.forEach((g, idx) => {
-                if (g.guessed_char) {
-                    g.guessed_char = g.guessed_char.toLowerCase();
-                }
+            glyphData.forEach(g => {
+                if (g.guessed_char) g.guessed_char = g.guessed_char.toLowerCase();
             });
             renderGlyphGrid(glyphData);
         });
@@ -264,10 +282,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (btnConvertUppercase) {
         btnConvertUppercase.addEventListener('click', () => {
-            glyphData.forEach((g, idx) => {
-                if (g.guessed_char) {
-                    g.guessed_char = g.guessed_char.toUpperCase();
-                }
+            glyphData.forEach(g => {
+                if (g.guessed_char) g.guessed_char = g.guessed_char.toUpperCase();
             });
             renderGlyphGrid(glyphData);
         });
@@ -277,7 +293,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (m1UploadForm) {
         m1UploadForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
             if (!fontFileInput.files[0] || !zipFileInput.files[0]) {
                 alert('Please select both a base font file and a handwritten glyph ZIP archive.');
                 return;
@@ -291,11 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append('zip_file', zipFileInput.files[0]);
 
             try {
-                const response = await fetch('/api/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-
+                const response = await fetch('/api/upload', { method: 'POST', body: formData });
                 if (!response.ok) {
                     const errData = await response.json();
                     throw new Error(errData.detail || 'Upload failed');
@@ -341,15 +352,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     <img src="${item.image_b64 || '/static/placeholder.png'}" alt="${item.filename}" />
                 </div>
                 <div class="glyph-input-wrapper">
-                    <input type="text" 
-                           class="glyph-char-input" 
-                           maxlength="1" 
-                           value="${item.guessed_char || ''}" 
-                           data-index="${index}">
+                    <input type="text" class="glyph-char-input" maxlength="1" value="${item.guessed_char || ''}" data-index="${index}">
                 </div>
                 <div class="glyph-filename" title="${item.filename}">${item.filename}</div>
             `;
-
             glyphGrid.appendChild(card);
         });
 
@@ -366,10 +372,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 glyphData[idx].guessed_char = e.target.value;
                 validateDuplicates();
             });
-
-            input.addEventListener('focus', () => {
-                input.select();
-            });
+            input.addEventListener('focus', () => input.select());
         });
     };
 
@@ -378,18 +381,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const charCounts = {};
         glyphData.forEach(g => {
             const c = g.guessed_char;
-            if (c) {
-                charCounts[c] = (charCounts[c] || 0) + 1;
-            }
+            if (c) charCounts[c] = (charCounts[c] || 0) + 1;
         });
 
         let hasDuplicate = false;
         const cards = glyphGrid.querySelectorAll('.glyph-card');
-
         cards.forEach(card => {
             const input = card.querySelector('.glyph-char-input');
             const val = input.value;
-
             if (val && charCounts[val] > 1) {
                 card.classList.add('duplicate-error');
                 hasDuplicate = true;
@@ -399,31 +398,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (duplicateWarning) {
-            if (hasDuplicate) {
-                duplicateWarning.classList.remove('hidden');
-            } else {
-                duplicateWarning.classList.add('hidden');
-            }
+            if (hasDuplicate) duplicateWarning.classList.remove('hidden');
+            else duplicateWarning.classList.add('hidden');
         }
     };
-
-    if (glyphFilterInput) {
-        glyphFilterInput.addEventListener('input', (e) => {
-            const query = e.target.value.toLowerCase();
-            const cards = glyphGrid.querySelectorAll('.glyph-card');
-            
-            cards.forEach(card => {
-                const inputVal = card.querySelector('.glyph-char-input').value.toLowerCase();
-                const fileName = card.querySelector('.glyph-filename').textContent.toLowerCase();
-                
-                if (!query || inputVal.includes(query) || fileName.includes(query)) {
-                    card.style.display = 'flex';
-                } else {
-                    card.style.display = 'none';
-                }
-            });
-        });
-    }
 
     if (btnM1Back) {
         btnM1Back.addEventListener('click', () => {
@@ -451,10 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const payload = {
                     upload_id: sessionUploadId,
-                    mappings: glyphData.map(g => ({
-                        image_path: g.image_path,
-                        char: g.guessed_char
-                    })),
+                    mappings: glyphData.map(g => ({ image_path: g.image_path, char: g.guessed_char })),
                     metadata: {
                         family_name: m1FamilyName ? m1FamilyName.value.trim() || 'My Handwritten Font' : 'My Handwritten Font',
                         style_name: m1StyleName ? m1StyleName.value.trim() || 'Regular' : 'Regular',
@@ -489,7 +464,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (m2UploadForm) {
         m2UploadForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-
             if (!fontAInput.files[0] || !fontBInput.files[0]) {
                 alert('Please select both Base Font A and Source Latin Font B.');
                 return;
@@ -503,11 +477,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 formData.append('font_a', fontAInput.files[0]);
                 formData.append('font_b', fontBInput.files[0]);
 
-                const uploadRes = await fetch('/api/upload-font2font', {
-                    method: 'POST',
-                    body: formData
-                });
-
+                const uploadRes = await fetch('/api/upload-font2font', { method: 'POST', body: formData });
                 if (!uploadRes.ok) {
                     const errData = await uploadRes.json();
                     throw new Error(errData.detail || 'Font upload failed');
@@ -558,7 +528,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- Mode 3: Selective Font-to-Font Latin Replacement ---
+    // --- Mode 3: Superimposition Studio & Calibration ---
     if (m3UploadForm) {
         m3UploadForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -569,18 +539,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             btnM3Inspect.disabled = true;
-            btnM3Inspect.querySelector('span').textContent = 'Inspecting Glyphs...';
+            btnM3Inspect.querySelector('span').textContent = 'Inspecting SVG Glyphs...';
 
             try {
                 const formData = new FormData();
                 formData.append('font_a', fontA3Input.files[0]);
                 formData.append('font_b', fontB3Input.files[0]);
 
-                const uploadRes = await fetch('/api/upload-font2font-selective', {
-                    method: 'POST',
-                    body: formData
-                });
-
+                const uploadRes = await fetch('/api/upload-font2font-selective', { method: 'POST', body: formData });
                 if (!uploadRes.ok) {
                     const errData = await uploadRes.json();
                     throw new Error(errData.detail || 'Font inspection failed');
@@ -590,20 +556,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 sessionUploadId = data.upload_id;
                 matrixData = data.comparison_items;
 
-                // Default all available characters in Font B to selected
                 selectedUnicodes.clear();
+                calibrations = {};
+
                 matrixData.forEach(item => {
                     if (item.exists_b) {
                         selectedUnicodes.add(item.unicode);
+                        calibrations[item.unicode] = { scale: 1.0, x_offset: 0.0, y_offset: 0.0 };
                     }
                 });
 
+                populateCharacterDropdown(matrixData);
                 renderMatrixGrid(matrixData);
 
+                // Set initial active studio character to U+0041 ('A') if available
+                const firstAvailable = matrixData.find(i => i.exists_b);
+                activeStudioUcode = firstAvailable ? firstAvailable.unicode : 65;
+                if (charSelectDropdown) charSelectDropdown.value = activeStudioUcode;
+
+                renderSuperimpositionStudio(activeStudioUcode);
+
                 const fontABaseName = fontA3Input.files[0].name.replace(/\.[^/.]+$/, "");
-                if (m3FamilyName) m3FamilyName.value = `${fontABaseName} Selective`;
+                if (m3FamilyName) m3FamilyName.value = `${fontABaseName} Calibrated`;
                 if (m3StyleName) m3StyleName.value = "Regular";
-                if (m3FullName) m3FullName.value = `${fontABaseName} Selective Regular`;
+                if (m3FullName) m3FullName.value = `${fontABaseName} Calibrated Regular`;
 
                 hideAllSections();
                 if (sectionM3Review) sectionM3Review.classList.add('active');
@@ -613,8 +589,186 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert(`Inspection Error: ${err.message}`);
             } finally {
                 btnM3Inspect.disabled = false;
-                btnM3Inspect.querySelector('span').textContent = 'Inspect & Compare Glyphs';
+                btnM3Inspect.querySelector('span').textContent = 'Launch Superimposition Studio';
             }
+        });
+    }
+
+    const populateCharacterDropdown = (items) => {
+        if (!charSelectDropdown) return;
+        charSelectDropdown.innerHTML = '';
+        items.forEach(item => {
+            if (item.exists_b) {
+                const opt = document.createElement('option');
+                opt.value = item.unicode;
+                opt.textContent = `${item.char} (U+${item.unicode.toString(16).toUpperCase().padStart(4, '0')})`;
+                charSelectDropdown.appendChild(opt);
+            }
+        });
+    };
+
+    // Render Superimposition SVG Canvas
+    const renderSuperimpositionStudio = (ucode) => {
+        activeStudioUcode = ucode;
+        const item = matrixData.find(i => i.unicode === ucode);
+        if (!item) return;
+
+        if (activeCharDisplay) activeCharDisplay.textContent = item.char;
+        if (charSelectDropdown) charSelectDropdown.value = ucode;
+        if (replaceCharCheckbox) replaceCharCheckbox.checked = selectedUnicodes.has(ucode);
+
+        // Fetch or init calibration state
+        if (!calibrations[ucode]) {
+            calibrations[ucode] = { scale: 1.0, x_offset: 0.0, y_offset: 0.0 };
+        }
+        const calib = calibrations[ucode];
+
+        // Update Slider Readouts
+        if (sliderScale) sliderScale.value = Math.round(calib.scale * 100);
+        if (valScale) valScale.textContent = `${Math.round(calib.scale * 100)}%`;
+
+        if (sliderXOff) sliderXOff.value = Math.round(calib.x_offset);
+        if (valXOff) valXOff.textContent = `${Math.round(calib.x_offset)} px`;
+
+        if (sliderYOff) sliderYOff.value = Math.round(calib.y_offset);
+        if (valYOff) valYOff.textContent = `${Math.round(calib.y_offset)} px`;
+
+        // Parse SVG paths from fontforge export
+        let pathAData = extractSvgPathD(item.svg_a);
+        let pathBData = extractSvgPathD(item.svg_b);
+
+        // Render Canvas SVG
+        const emSize = item.em_size_a || 1000;
+        const viewBoxStr = `-200 -200 1400 1400`;
+
+        // SVG transformation matrix for FontForge (FontForge Y axis points UP, SVG Y axis points DOWN)
+        // We flip Y via transform="scale(1, -1) translate(0, -emSize)"
+        const svgContent = `
+            <svg viewBox="${viewBoxStr}" xmlns="http://www.w3.org/2000/svg">
+                <!-- Typographic Guide Lines -->
+                <!-- Baseline y=0 -->
+                <line x1="-200" y1="0" x2="1400" y2="0" stroke="#94a3b8" stroke-width="3" stroke-dasharray="8 8" transform="scale(1, -1)" />
+                <!-- Cap-height y=700 -->
+                <line x1="-200" y1="700" x2="1400" y2="700" stroke="#6366f1" stroke-width="2" stroke-dasharray="6 6" transform="scale(1, -1)" />
+                <!-- X-height y=480 -->
+                <line x1="-200" y1="480" x2="1400" y2="480" stroke="#10b981" stroke-width="2" stroke-dasharray="6 6" transform="scale(1, -1)" />
+                <!-- Startline x=50 -->
+                <line x1="50" y1="-200" x2="50" y2="1400" stroke="#8b5cf6" stroke-width="3" stroke-dasharray="6 6" transform="scale(1, -1)" />
+
+                <g transform="scale(1, -1)">
+                    <!-- Font A Ghost Reference Silhouette (Blue) -->
+                    ${pathAData ? `<path d="${pathAData}" fill="#6366f1" fill-opacity="0.3" stroke="#818cf8" stroke-width="4" />` : ''}
+
+                    <!-- Font B Superimposed Overlay (Pink) with Live Calibration Transforms -->
+                    ${pathBData ? `
+                        <g transform="translate(${calib.x_offset}, ${calib.y_offset}) scale(${calib.scale})">
+                            <path d="${pathBData}" fill="#ec4899" fill-opacity="0.65" stroke="#f472b6" stroke-width="4" />
+                        </g>
+                    ` : ''}
+                </g>
+            </svg>
+        `;
+
+        if (superimposeCanvasBox) {
+            superimposeCanvasBox.innerHTML = svgContent;
+        }
+
+        highlightActiveMatrixCard(ucode);
+    };
+
+    const extractSvgPathD = (rawSvg) => {
+        if (!rawSvg) return '';
+        const match = rawSvg.match(/d="([^"]+)"/);
+        return match ? match[1] : '';
+    };
+
+    // Live Slider Events
+    if (sliderScale) {
+        sliderScale.addEventListener('input', (e) => {
+            const sc = parseFloat(e.target.value) / 100.0;
+            if (calibrations[activeStudioUcode]) calibrations[activeStudioUcode].scale = sc;
+            if (valScale) valScale.textContent = `${e.target.value}%`;
+            renderSuperimpositionStudio(activeStudioUcode);
+        });
+    }
+
+    if (sliderXOff) {
+        sliderXOff.addEventListener('input', (e) => {
+            const xo = parseFloat(e.target.value);
+            if (calibrations[activeStudioUcode]) calibrations[activeStudioUcode].x_offset = xo;
+            if (valXOff) valXOff.textContent = `${xo} px`;
+            renderSuperimpositionStudio(activeStudioUcode);
+        });
+    }
+
+    if (sliderYOff) {
+        sliderYOff.addEventListener('input', (e) => {
+            const yo = parseFloat(e.target.value);
+            if (calibrations[activeStudioUcode]) calibrations[activeStudioUcode].y_offset = yo;
+            if (valYOff) valYOff.textContent = `${yo} px`;
+            renderSuperimpositionStudio(activeStudioUcode);
+        });
+    }
+
+    if (charSelectDropdown) {
+        charSelectDropdown.addEventListener('change', (e) => {
+            const ucode = parseInt(e.target.value, 10);
+            renderSuperimpositionStudio(ucode);
+        });
+    }
+
+    if (replaceCharCheckbox) {
+        replaceCharCheckbox.addEventListener('change', (e) => {
+            if (e.target.checked) selectedUnicodes.add(activeStudioUcode);
+            else selectedUnicodes.delete(activeStudioUcode);
+            updateSelectedCount();
+            renderMatrixGrid(matrixData);
+        });
+    }
+
+    // Studio Action Buttons
+    if (btnAutoCenter) {
+        btnAutoCenter.addEventListener('click', () => {
+            const item = matrixData.find(i => i.unicode === activeStudioUcode);
+            if (!item || !item.exists_a || !item.exists_b) return;
+
+            const bboxA = item.bbox_a;
+            const bboxB = item.bbox_b;
+
+            const hA = bboxA[3] - bboxA[1];
+            const hB = bboxB[3] - bboxB[1];
+            const scaleFactor = (hA > 0 && hB > 0) ? (hA / hB) : 1.0;
+
+            const centerXA = (bboxA[0] + bboxA[2]) / 2.0;
+            const centerXB = (bboxB[0] + bboxB[2]) / 2.0;
+            const xShift = centerXA - (centerXB * scaleFactor);
+
+            const yShift = bboxA[1] - (bboxB[1] * scaleFactor);
+
+            calibrations[activeStudioUcode] = {
+                scale: parseFloat(scaleFactor.toFixed(2)),
+                x_offset: parseFloat(xShift.toFixed(1)),
+                y_offset: parseFloat(yShift.toFixed(1))
+            };
+
+            renderSuperimpositionStudio(activeStudioUcode);
+        });
+    }
+
+    if (btnApplyAll) {
+        btnApplyAll.addEventListener('click', () => {
+            const currentCalib = calibrations[activeStudioUcode] || { scale: 1.0, x_offset: 0.0, y_offset: 0.0 };
+            selectedUnicodes.forEach(ucode => {
+                calibrations[ucode] = { ...currentCalib };
+            });
+            alert(`Applied scale (${Math.round(currentCalib.scale * 100)}%), X-shift (${currentCalib.x_offset}px), and Y-shift (${currentCalib.y_offset}px) across all active letters.`);
+        });
+    }
+
+    if (btnResetCurrent) {
+        btnResetCurrent.addEventListener('click', () => {
+            calibrations[activeStudioUcode] = { scale: 1.0, x_offset: 0.0, y_offset: 0.0 };
+            renderSuperimpositionStudio(activeStudioUcode);
         });
     }
 
@@ -626,7 +780,9 @@ document.addEventListener('DOMContentLoaded', () => {
         items.forEach(item => {
             const card = document.createElement('div');
             const isChecked = selectedUnicodes.has(item.unicode);
-            card.className = `matrix-card ${isChecked ? 'selected' : ''}`;
+            const isActive = (item.unicode === activeStudioUcode);
+
+            card.className = `matrix-card ${isChecked ? 'selected' : ''} ${isActive ? 'active-calibration' : ''}`;
             card.dataset.unicode = item.unicode;
 
             card.innerHTML = `
@@ -650,10 +806,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
 
+            card.addEventListener('click', (e) => {
+                if (e.target.tagName !== 'INPUT') {
+                    renderSuperimpositionStudio(item.unicode);
+                }
+            });
+
             matrixGrid.appendChild(card);
         });
 
         attachMatrixCheckboxEvents();
+    };
+
+    const highlightActiveMatrixCard = (ucode) => {
+        if (!matrixGrid) return;
+        const cards = matrixGrid.querySelectorAll('.matrix-card');
+        cards.forEach(card => {
+            if (parseInt(card.dataset.unicode, 10) === ucode) {
+                card.classList.add('active-calibration');
+            } else {
+                card.classList.remove('active-calibration');
+            }
+        });
     };
 
     const attachMatrixCheckboxEvents = () => {
@@ -714,16 +888,11 @@ document.addEventListener('DOMContentLoaded', () => {
         matrixFilterInput.addEventListener('input', (e) => {
             const query = e.target.value.toLowerCase();
             const cards = matrixGrid.querySelectorAll('.matrix-card');
-            
             cards.forEach(card => {
                 const ucode = parseInt(card.dataset.unicode, 10);
                 const charStr = String.fromCharCode(ucode).toLowerCase();
-                
-                if (!query || charStr.includes(query)) {
-                    card.style.display = 'flex';
-                } else {
-                    card.style.display = 'none';
-                }
+                if (!query || charStr.includes(query)) card.style.display = 'flex';
+                else card.style.display = 'none';
             });
         });
     }
@@ -754,10 +923,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const payload = {
                     upload_id: sessionUploadId,
                     selected_unicodes: Array.from(selectedUnicodes),
+                    calibrations: calibrations,
                     metadata: {
-                        family_name: m3FamilyName ? m3FamilyName.value.trim() || 'Selective Latin Font' : 'Selective Latin Font',
+                        family_name: m3FamilyName ? m3FamilyName.value.trim() || 'Calibrated Selective Font' : 'Calibrated Selective Font',
                         style_name: m3StyleName ? m3StyleName.value.trim() || 'Regular' : 'Regular',
-                        full_name: m3FullName ? m3FullName.value.trim() || 'Selective Latin Font Regular' : 'Selective Latin Font Regular'
+                        full_name: m3FullName ? m3FullName.value.trim() || 'Calibrated Selective Font Regular' : 'Calibrated Selective Font Regular'
                     }
                 };
 
@@ -769,14 +939,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (!response.ok) {
                     const errData = await response.json();
-                    throw new Error(errData.detail || 'Selective font merge failed');
+                    throw new Error(errData.detail || 'Calibrated font merge failed');
                 }
 
                 const data = await response.json();
                 handleFontGenerationSuccess(data.download_url);
 
             } catch (err) {
-                alert(`Selective Font Merge Error: ${err.message}`);
+                alert(`Calibrated Font Merge Error: ${err.message}`);
                 hideAllSections();
                 if (sectionM3Review) sectionM3Review.classList.add('active');
                 setStep(2);

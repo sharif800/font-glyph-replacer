@@ -25,7 +25,7 @@
                 </svg>
             </div>
             <span class="brand-title">Font Synthesis Studio</span>
-            <span class="badge badge-accent">v3.0</span>
+            <span class="badge badge-accent">v3.1</span>
         </div>
 
         <div class="nav-actions">
@@ -98,9 +98,9 @@
                             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
                         </svg>
                     </div>
-                    <h3>Option 3: Selective Latin Replacer & Matrix Studio</h3>
-                    <p>Compare Latin characters side-by-side between Font A and Font B. Selectively pick exact letters to replace with precision metrics auto-centering & ink fitting.</p>
-                    <div class="mode-badge cyan">Interactive Comparison Matrix</div>
+                    <h3>Option 3: Superimposition & Alignment Studio</h3>
+                    <p>Superimpose Font B over Font A visually on a live canvas. Calibrate size, baseline, and startline offsets for every character before merging.</p>
+                    <div class="mode-badge cyan">Visual Superimposition Editor</div>
                     <button type="button" class="btn btn-cyan btn-block mt-auto" id="btn-select-mode-3">Select Option 3</button>
                 </div>
             </div>
@@ -115,7 +115,7 @@
             <div class="step-line"></div>
             <div class="step-item" id="step-indicator-2">
                 <div class="step-circle">2</div>
-                <div class="step-label" id="step-2-label">Review & Naming</div>
+                <div class="step-label" id="step-2-label">Superimpose & Calibrate</div>
             </div>
             <div class="step-line"></div>
             <div class="step-item" id="step-indicator-3">
@@ -370,12 +370,12 @@
         </section>
 
         <!-- ===================================================================
-             OPTION 3: SELECTIVE LATIN REPLACER (Comparison Matrix)
+             OPTION 3: SUPERIMPOSITION & ALIGNMENT STUDIO (Font A + Font B)
              =================================================================== -->
         <section class="card step-section" id="section-m3-upload">
             <div class="card-header">
-                <h2>Option 3: Selective Font-to-Font Latin Replacer</h2>
-                <p>Upload Font A and Font B to compare glyphs side-by-side and selectively choose which characters to replace.</p>
+                <h2>Option 3: Superimposition & Alignment Calibration Studio</h2>
+                <p>Upload Font A and Font B to visually superimpose glyphs over one another and calibrate size, startline, and baseline offsets.</p>
             </div>
 
             <form id="m3-upload-form" class="upload-grid">
@@ -431,7 +431,7 @@
 
                 <div class="form-actions full-width">
                     <button type="submit" class="btn btn-cyan btn-lg" id="btn-m3-inspect">
-                        <span>Inspect & Compare Glyphs</span>
+                        <span>Launch Superimposition Studio</span>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
                         </svg>
@@ -440,19 +440,104 @@
             </form>
         </section>
 
-        <!-- OPTION 3 MATRIX REVIEW -->
+        <!-- OPTION 3 SUPERIMPOSITION STUDIO REVIEW -->
         <section class="card step-section" id="section-m3-review">
             <div class="card-header flex-between">
                 <div>
-                    <h2>Selective Glyph Replacement Matrix</h2>
-                    <p>Check the characters you wish to replace from Font B into Font A with precision metrics normalization.</p>
+                    <h2>Superimposition & Calibration Studio</h2>
+                    <p>Font A is rendered in ghost blue (<span style="color:#6366f1;font-weight:600;">Font A Reference</span>). Font B is rendered in vibrant pink (<span style="color:#ec4899;font-weight:600;">Font B Candidate</span>). Adjust sliders to superimpose Font B over Font A.</p>
                 </div>
                 <div class="review-stats-badge cyan">
-                    <span id="selected-unicodes-count">0</span> Characters Selected
+                    <span id="selected-unicodes-count">0</span> Characters Active
                 </div>
             </div>
 
-            <div class="font-naming-card">
+            <!-- Main Studio Split View -->
+            <div class="studio-layout">
+                <!-- Left: Superimposition SVG Overlay Canvas -->
+                <div class="canvas-panel">
+                    <div class="canvas-header flex-between">
+                        <div class="canvas-title">
+                            Current Character: <strong id="active-char-display" class="highlight-char">A</strong>
+                        </div>
+                        <div class="canvas-legend">
+                            <span class="legend-item legend-a">Font A Silhouette</span>
+                            <span class="legend-item legend-b">Font B Overlay</span>
+                        </div>
+                    </div>
+
+                    <div class="svg-canvas-container" id="superimpose-canvas-box">
+                        <!-- SVG Superimposition Canvas rendered dynamically -->
+                    </div>
+
+                    <div class="canvas-guide-legend">
+                        <span><span class="line-dot baseline"></span> Baseline (y=0)</span>
+                        <span><span class="line-dot cap"></span> Cap-Height</span>
+                        <span><span class="line-dot start"></span> Startline (Left Bearing)</span>
+                    </div>
+                </div>
+
+                <!-- Right: Live Calibration Controls Panel -->
+                <div class="controls-panel">
+                    <div class="control-card">
+                        <h3>Character Selection & Toggle</h3>
+                        <div class="form-group row-group">
+                            <label for="char-select-dropdown">Active Character:</label>
+                            <select id="char-select-dropdown" class="form-control"></select>
+                        </div>
+                        <div class="checkbox-toggle-row">
+                            <input type="checkbox" id="replace-char-checkbox" checked class="matrix-checkbox">
+                            <label for="replace-char-checkbox">Replace this character in Font A</label>
+                        </div>
+                    </div>
+
+                    <div class="control-card">
+                        <h3>Live Glyph Alignment Controls</h3>
+                        
+                        <!-- Scale Slider -->
+                        <div class="slider-group">
+                            <div class="slider-header flex-between">
+                                <label for="slider-scale">Size Scale Factor</label>
+                                <span class="slider-value" id="val-scale">100%</span>
+                            </div>
+                            <input type="range" id="slider-scale" min="50" max="150" value="100" class="slider-control">
+                        </div>
+
+                        <!-- Startline X-Offset Slider -->
+                        <div class="slider-group">
+                            <div class="slider-header flex-between">
+                                <label for="slider-x-off">Startline X-Offset (Horiz Shift)</label>
+                                <span class="slider-value" id="val-x-off">0 px</span>
+                            </div>
+                            <input type="range" id="slider-x-off" min="-150" max="150" value="0" class="slider-control">
+                        </div>
+
+                        <!-- Baseline Y-Offset Slider -->
+                        <div class="slider-group">
+                            <div class="slider-header flex-between">
+                                <label for="slider-y-off">Baseline Y-Offset (Vert Shift)</label>
+                                <span class="slider-value" id="val-y-off">0 px</span>
+                            </div>
+                            <input type="range" id="slider-y-off" min="-150" max="150" value="0" class="slider-control">
+                        </div>
+
+                        <div class="control-button-grid">
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-auto-center">
+                                🎯 Auto-Center & Snap
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-apply-all">
+                                ⚡ Apply to All Letters
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="btn-reset-current">
+                                🔄 Reset Character
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Custom Font Naming Panel -->
+            <div class="font-naming-card mt-1">
                 <div class="naming-header">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
@@ -462,7 +547,7 @@
                 <div class="naming-grid">
                     <div class="form-group">
                         <label for="m3-family-name">Font Family Name</label>
-                        <input type="text" id="m3-family-name" class="form-control" placeholder="Selective Latin Font">
+                        <input type="text" id="m3-family-name" class="form-control" placeholder="Calibrated Selective Font">
                     </div>
                     <div class="form-group">
                         <label for="m3-style-name">Subfamily / Style</label>
@@ -470,11 +555,12 @@
                     </div>
                     <div class="form-group">
                         <label for="m3-full-name">Full Font Name</label>
-                        <input type="text" id="m3-full-name" class="form-control" placeholder="Selective Latin Font Regular">
+                        <input type="text" id="m3-full-name" class="form-control" placeholder="Calibrated Selective Font Regular">
                     </div>
                 </div>
             </div>
 
+            <!-- Bottom Quick Matrix Grid -->
             <div class="toolbar">
                 <div class="search-box">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -504,7 +590,7 @@
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
                     </svg>
-                    <span>Confirm & Merge Selected Glyphs</span>
+                    <span>Confirm & Merge Calibrated Glyphs</span>
                 </button>
             </div>
         </section>
@@ -516,7 +602,7 @@
             <div class="loading-state" id="generation-loading">
                 <div class="spinner-glow"></div>
                 <h3>Synthesizing & Naming Custom Font File...</h3>
-                <p>Processing glyph vectors, tightly fitting ink contours, updating SFNT font metadata table, and setting side bearings with FontForge.</p>
+                <p>Processing calibrated glyph vectors, startline/baseline transforms, SFNT font metadata table, and setting side bearings with FontForge.</p>
             </div>
 
             <div class="success-state hidden" id="generation-success">
@@ -527,7 +613,7 @@
                     </svg>
                 </div>
                 <h2>Font Successfully Generated & Renamed!</h2>
-                <p>Your custom font has been compiled with updated Latin glyphs, ink-stroke baseline alignment, and new SFNT family metadata.</p>
+                <p>Your custom font has been compiled with updated Latin glyphs, calibrated visual alignment, and new SFNT family metadata.</p>
 
                 <div class="font-tester-card">
                     <h3>Interactive Font Preview</h3>
@@ -554,6 +640,6 @@
     </main>
 
     <!-- JS -->
-    <script src="/static/app.js?v=3.0"></script>
+    <script src="/static/app.js?v=3.1"></script>
 </body>
 </html>
