@@ -1,5 +1,5 @@
 /**
- * Handwritten & Latin Font Replacer Studio - Frontend Logic (v3.1)
+ * Handwritten & Latin Font Replacer Studio - Frontend Logic (v3.2)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -607,7 +607,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    // Render Superimposition SVG Canvas
+    const extractSvgPathD = (rawSvg) => {
+        if (!rawSvg) return '';
+        const dMatches = [...rawSvg.matchAll(/d="([^"]+)"/g)];
+        if (dMatches.length > 0) {
+            return dMatches.map(m => m[1]).join(' ');
+        }
+        return '';
+    };
+
+    // Render Superimposition SVG Canvas with 100% Centered Baseline Alignment
     const renderSuperimpositionStudio = (ucode) => {
         activeStudioUcode = ucode;
         const item = matrixData.find(i => i.unicode === ucode);
@@ -637,35 +646,45 @@ document.addEventListener('DOMContentLoaded', () => {
         let pathAData = extractSvgPathD(item.svg_a);
         let pathBData = extractSvgPathD(item.svg_b);
 
-        // Render Canvas SVG
-        const emSize = item.em_size_a || 1000;
-        const viewBoxStr = `-200 -200 1400 1400`;
+        // Perfect Canvas Centering Math:
+        // SVG ViewBox: 0 0 1000 1000
+        // Baseline (y=0 in FontForge) maps to SVG Y = 750 (leaving 250px below for descenders!).
+        // Startline (x=0 in FontForge) maps to SVG X = 200 (leaving 200px left margin!).
+        // Cap-Height (y=700 in FontForge) maps to SVG Y = 750 - 700 = 50 (50px top margin!).
+        // X-Height (y=480 in FontForge) maps to SVG Y = 750 - 480 = 270.
 
-        // SVG transformation matrix for FontForge (FontForge Y axis points UP, SVG Y axis points DOWN)
-        // We flip Y via transform="scale(1, -1) translate(0, -emSize)"
         const svgContent = `
-            <svg viewBox="${viewBoxStr}" xmlns="http://www.w3.org/2000/svg">
-                <!-- Typographic Guide Lines -->
-                <!-- Baseline y=0 -->
-                <line x1="-200" y1="0" x2="1400" y2="0" stroke="#94a3b8" stroke-width="3" stroke-dasharray="8 8" transform="scale(1, -1)" />
-                <!-- Cap-height y=700 -->
-                <line x1="-200" y1="700" x2="1400" y2="700" stroke="#6366f1" stroke-width="2" stroke-dasharray="6 6" transform="scale(1, -1)" />
-                <!-- X-height y=480 -->
-                <line x1="-200" y1="480" x2="1400" y2="480" stroke="#10b981" stroke-width="2" stroke-dasharray="6 6" transform="scale(1, -1)" />
-                <!-- Startline x=50 -->
-                <line x1="50" y1="-200" x2="50" y2="1400" stroke="#8b5cf6" stroke-width="3" stroke-dasharray="6 6" transform="scale(1, -1)" />
+            <svg viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;background:#03050a;">
+                <!-- Typographic Reference Guide Lines -->
+                <!-- Baseline (Y=750 in SVG space) -->
+                <line x1="0" y1="750" x2="1000" y2="750" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6" />
+                <text x="20" y="740" fill="#94a3b8" font-size="20" font-family="sans-serif">Baseline (y=0)</text>
 
-                <g transform="scale(1, -1)">
-                    <!-- Font A Ghost Reference Silhouette (Blue) -->
-                    ${pathAData ? `<path d="${pathAData}" fill="#6366f1" fill-opacity="0.3" stroke="#818cf8" stroke-width="4" />` : ''}
+                <!-- Cap-Height (Y=50 in SVG space) -->
+                <line x1="0" y1="50" x2="1000" y2="50" stroke="#6366f1" stroke-width="2" stroke-dasharray="6 6" />
+                <text x="20" y="40" fill="#6366f1" font-size="20" font-family="sans-serif">Cap-Height (y=700)</text>
 
-                    <!-- Font B Superimposed Overlay (Pink) with Live Calibration Transforms -->
-                    ${pathBData ? `
-                        <g transform="translate(${calib.x_offset}, ${calib.y_offset}) scale(${calib.scale})">
-                            <path d="${pathBData}" fill="#ec4899" fill-opacity="0.65" stroke="#f472b6" stroke-width="4" />
-                        </g>
-                    ` : ''}
-                </g>
+                <!-- X-Height (Y=270 in SVG space) -->
+                <line x1="0" y1="270" x2="1000" y2="270" stroke="#10b981" stroke-width="2" stroke-dasharray="6 6" />
+                <text x="20" y="260" fill="#10b981" font-size="20" font-family="sans-serif">X-Height (y=480)</text>
+
+                <!-- Startline Left Bearing (X=200 in SVG space) -->
+                <line x1="200" y1="0" x2="200" y2="1000" stroke="#8b5cf6" stroke-width="2" stroke-dasharray="6 6" />
+                <text x="210" y="980" fill="#8b5cf6" font-size="20" font-family="sans-serif">Startline</text>
+
+                <!-- Font A Ghost Reference Silhouette (Blue) -->
+                ${pathAData ? `
+                    <g transform="translate(200, 750) scale(1, -1)" fill="#6366f1" fill-opacity="0.3" stroke="#818cf8" stroke-width="3">
+                        <path d="${pathAData}" />
+                    </g>
+                ` : ''}
+
+                <!-- Font B Superimposed Overlay (Pink) with Live Calibration Transforms -->
+                ${pathBData ? `
+                    <g transform="translate(200, 750) scale(1, -1) translate(${calib.x_offset}, ${calib.y_offset}) scale(${calib.scale})" fill="#ec4899" fill-opacity="0.6" stroke="#f472b6" stroke-width="3">
+                        <path d="${pathBData}" />
+                    </g>
+                ` : ''}
             </svg>
         `;
 
@@ -674,12 +693,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         highlightActiveMatrixCard(ucode);
-    };
-
-    const extractSvgPathD = (rawSvg) => {
-        if (!rawSvg) return '';
-        const match = rawSvg.match(/d="([^"]+)"/);
-        return match ? match[1] : '';
     };
 
     // Live Slider Events
