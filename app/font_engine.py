@@ -2,7 +2,33 @@ import os
 import sys
 import subprocess
 import tempfile
-from PIL import Image, ImageOps, ImageFilter
+import re
+from PIL import Image, ImageOps
+
+def sanitize_font_identifier(name: str) -> str:
+    """Sanitizes font name for PostScript fontname identifier (alphanumeric and hyphens only)."""
+    clean = re.sub(r'[^a-zA-Z0-9-]', '', name)
+    return clean if clean else "CustomFont-Regular"
+
+def apply_font_metadata(font, metadata: dict):
+    """
+    Applies custom Font Family, Style, Full Name, and SFNT metadata to a FontForge font object.
+    """
+    family_name = metadata.get("family_name", "").strip() or "Custom Handwritten Font"
+    style_name = metadata.get("style_name", "").strip() or "Regular"
+    full_name = metadata.get("full_name", "").strip() or f"{family_name} {style_name}"
+    postscript_name = sanitize_font_identifier(f"{family_name}-{style_name}")
+
+    font.fontname = postscript_name
+    font.familyname = family_name
+    font.fullname = full_name
+
+    # Set SFNT Name table entries for cross-platform compatibility (Windows / Mac)
+    font.appendSFNTName('English (US)', 'Family', family_name)
+    font.appendSFNTName('English (US)', 'SubFamily', style_name)
+    font.appendSFNTName('English (US)', 'Fullname', full_name)
+    font.appendSFNTName('English (US)', 'Preferred Family', family_name)
+    font.appendSFNTName('English (US)', 'Preferred Subfamily', style_name)
 
 def convert_image_to_svg(image_path: str, svg_output_path: str) -> bool:
     """
@@ -14,24 +40,17 @@ def convert_image_to_svg(image_path: str, svg_output_path: str) -> bool:
     
     try:
         with Image.open(image_path) as img:
-            # Convert to grayscale
             gray = img.convert('L')
-            # Thresholding to binary (black glyph on white background)
             threshold = 180
             binary = gray.point(lambda p: 255 if p > threshold else 0)
             
-            # Ensure background is white and foreground is black for Potrace
-            # Invert if center/corners are mostly dark
             corner_val = binary.getpixel((0, 0))
             if corner_val == 0:
                 binary = ImageOps.invert(binary)
                 
-            # Convert to 1-bit image mode '1'
             bw = binary.convert('1')
             bw.save(bmp_path)
             
-        # Run Potrace command to generate SVG
-        # -s for SVG output, -k for black/white cutoff
         cmd = ["potrace", "-s", "-o", svg_output_path, bmp_path]
         res = subprocess.run(cmd, capture_output=True, text=True)
         if res.returncode == 0 and os.path.exists(svg_output_path):
@@ -47,17 +66,11 @@ def convert_image_to_svg(image_path: str, svg_output_path: str) -> bool:
         if os.path.exists(bmp_path):
             os.remove(bmp_path)
 
-def generate_font_with_fontforge_python(base_font_path: str, char_svg_mappings: list[dict], output_font_path: str):
-    """
-    Executes FontForge python logic directly if fontforge package is installed in environment.
-    """
+def generate_font_with_fontforge_python(base_font_path: str, char_svg_mappings: list[dict], metadata: dict, output_font_path: str):
     import fontforge
 
     font = fontforge.open(base_font_path)
-    # Ensure standard em size
-    em_size = font.em
-    if em_size == 0:
-        em_size = 1000
+    em_size = font.em if font.em > 0 else 1000
 
     for item in char_svg_mappings:
         char = item["char"]
@@ -69,49 +82,36 @@ def generate_font_with_fontforge_python(base_font_path: str, char_svg_mappings: 
         unicode_val = ord(char)
         font.selection.select(unicode_val)
         
-        # Create or select character glyph
         glyph = font.createChar(unicode_val, f"uni{unicode_val:04X}")
         glyph.clear()
-        
-        # Import vector outlines
         glyph.importOutlines(svg_path)
         
-        # Auto-fit & Baseline alignment
-        # Bounding box format: (xmin, ymin, xmax, ymax)
         bbox = glyph.boundingBox()
         if bbox and (bbox[2] - bbox[0] > 0) and (bbox[3] - bbox[1] > 0):
             glyph_height = bbox[3] - bbox[1]
-            target_height = em_size * 0.75  # 75% of em height for capital/lowercase ascenders
+            target_height = em_size * 0.75
             scale_factor = target_height / glyph_height if glyph_height > 0 else 1.0
             
-            # Scale glyph
             glyph.transform((scale_factor, 0, 0, scale_factor, 0, 0))
-            
-            # Recompute bbox after scale
             bbox = glyph.boundingBox()
-            
-            # Translate to align bottom near baseline (y = 0)
             ymin = bbox[1]
             glyph.transform((1, 0, 0, 1, 0, -ymin))
             
-        # Apply typography standards: Side bearings
         glyph.left_side_bearing = 50
         glyph.right_side_bearing = 50
-        
-    # Generate TTF font file
+
+    apply_font_metadata(font, metadata)
     font.generate(output_font_path)
     font.close()
 
-def generate_font_via_subprocess(base_font_path: str, char_svg_mappings: list[dict], output_font_path: str):
-    """
-    Fallback method executing fontforge CLI with an inline Python script if python-fontforge is external.
-    """
+def generate_font_via_subprocess(base_font_path: str, char_svg_mappings: list[dict], metadata: dict, output_font_path: str):
     script_content = f"""
-import fontforge, sys, json
+import fontforge, sys, json, re
 
 base_font_path = sys.argv[1]
 output_font_path = sys.argv[2]
 mappings = json.loads(sys.argv[3])
+metadata = json.loads(sys.argv[4])
 
 font = fontforge.open(base_font_path)
 em_size = font.em if font.em > 0 else 1000
@@ -141,6 +141,19 @@ for item in mappings:
     glyph.left_side_bearing = 50
     glyph.right_side_bearing = 50
 
+family_name = metadata.get("family_name", "").strip() or "Custom Handwritten Font"
+style_name = metadata.get("style_name", "").strip() or "Regular"
+full_name = metadata.get("full_name", "").strip() or (family_name + " " + style_name)
+postscript_name = re.sub(r'[^a-zA-Z0-9-]', '', family_name + "-" + style_name) or "CustomFont-Regular"
+
+font.fontname = postscript_name
+font.familyname = family_name
+font.fullname = full_name
+
+font.appendSFNTName('English (US)', 'Family', family_name)
+font.appendSFNTName('English (US)', 'SubFamily', style_name)
+font.appendSFNTName('English (US)', 'Fullname', full_name)
+
 font.generate(output_font_path)
 font.close()
 """
@@ -150,7 +163,7 @@ font.close()
 
     try:
         import json
-        cmd = ["fontforge", "-script", temp_script, base_font_path, output_font_path, json.dumps(char_svg_mappings)]
+        cmd = ["fontforge", "-script", temp_script, base_font_path, output_font_path, json.dumps(char_svg_mappings), json.dumps(metadata)]
         res = subprocess.run(cmd, capture_output=True, text=True)
         if res.returncode != 0:
             raise RuntimeError(f"FontForge execution failed: {res.stderr}")
@@ -158,12 +171,9 @@ font.close()
         if os.path.exists(temp_script):
             os.remove(temp_script)
 
-def process_and_build_font(base_font_path: str, mappings: list[dict], output_dir: str) -> str:
+def process_and_build_font(base_font_path: str, mappings: list[dict], metadata: dict, output_dir: str) -> str:
     """
-    Main pipeline function:
-    1. Vectorizes glyph images to SVG using Potrace
-    2. Modifies base font with FontForge
-    3. Returns path to compiled output TTF font file.
+    Mode 1 Pipeline: Vectorizes handwritten images and imports them into base font.
     """
     os.makedirs(output_dir, exist_ok=True)
     svg_dir = os.path.join(output_dir, "svgs")
@@ -190,11 +200,103 @@ def process_and_build_font(base_font_path: str, mappings: list[dict], output_dir
             
     output_font_path = os.path.join(output_dir, "custom_handwritten_font.ttf")
     
-    # Try direct Python FontForge module import
     try:
-        generate_font_with_fontforge_python(base_font_path, char_svg_mappings, output_font_path)
+        generate_font_with_fontforge_python(base_font_path, char_svg_mappings, metadata, output_font_path)
     except ImportError:
-        # Fallback to FontForge binary CLI script invocation
-        generate_font_via_subprocess(base_font_path, char_svg_mappings, output_font_path)
+        generate_font_via_subprocess(base_font_path, char_svg_mappings, metadata, output_font_path)
         
+    return output_font_path
+
+def merge_latin_fonts_with_fontforge_python(base_font_a_path: str, source_font_b_path: str, metadata: dict, output_font_path: str):
+    """
+    Mode 2 Engine: Transfers Latin glyphs (A-Z, a-z, 0-9, symbols) from Font B to Font A.
+    """
+    import fontforge
+
+    font_a = fontforge.open(base_font_a_path)
+    font_b = fontforge.open(source_font_b_path)
+
+    # Standard Printable ASCII / Latin range (U+0020 space to U+007E tilde)
+    latin_unicodes = range(0x0020, 0x007F)
+    transferred_count = 0
+
+    for ucode in latin_unicodes:
+        if ucode in font_b:
+            font_b.selection.select(ucode)
+            font_b.copy()
+            font_a.selection.select(ucode)
+            font_a.paste()
+            transferred_count += 1
+
+    apply_font_metadata(font_a, metadata)
+    font_a.generate(output_font_path)
+
+    font_a.close()
+    font_b.close()
+    return transferred_count
+
+def merge_latin_fonts_via_subprocess(base_font_a_path: str, source_font_b_path: str, metadata: dict, output_font_path: str):
+    script_content = f"""
+import fontforge, sys, json, re
+
+font_a_path = sys.argv[1]
+font_b_path = sys.argv[2]
+output_path = sys.argv[3]
+metadata = json.loads(sys.argv[4])
+
+font_a = fontforge.open(font_a_path)
+font_b = fontforge.open(font_b_path)
+
+latin_unicodes = range(0x0020, 0x007F)
+
+for ucode in latin_unicodes:
+    if ucode in font_b:
+        font_b.selection.select(ucode)
+        font_b.copy()
+        font_a.selection.select(ucode)
+        font_a.paste()
+
+family_name = metadata.get("family_name", "").strip() or "Merged Latin Font"
+style_name = metadata.get("style_name", "").strip() or "Regular"
+full_name = metadata.get("full_name", "").strip() or (family_name + " " + style_name)
+postscript_name = re.sub(r'[^a-zA-Z0-9-]', '', family_name + "-" + style_name) or "MergedLatinFont-Regular"
+
+font_a.fontname = postscript_name
+font_a.familyname = family_name
+font_a.fullname = full_name
+
+font_a.appendSFNTName('English (US)', 'Family', family_name)
+font_a.appendSFNTName('English (US)', 'SubFamily', style_name)
+font_a.appendSFNTName('English (US)', 'Fullname', full_name)
+
+font_a.generate(output_path)
+font_a.close()
+font_b.close()
+"""
+    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
+        f.write(script_content)
+        temp_script = f.name
+
+    try:
+        import json
+        cmd = ["fontforge", "-script", temp_script, base_font_a_path, source_font_b_path, output_font_path, json.dumps(metadata)]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        if res.returncode != 0:
+            raise RuntimeError(f"FontForge font merge execution failed: {res.stderr}")
+    finally:
+        if os.path.exists(temp_script):
+            os.remove(temp_script)
+
+def merge_latin_fonts(base_font_a_path: str, source_font_b_path: str, metadata: dict, output_dir: str) -> str:
+    """
+    Main function for Mode 2: Font-to-Font Latin Replacement.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    output_font_path = os.path.join(output_dir, "merged_latin_font.ttf")
+
+    try:
+        merge_latin_fonts_with_fontforge_python(base_font_a_path, source_font_b_path, metadata, output_font_path)
+    except ImportError:
+        merge_latin_fonts_via_subprocess(base_font_a_path, source_font_b_path, metadata, output_font_path)
+
     return output_font_path

@@ -13,9 +13,8 @@ from pydantic import BaseModel
 from app.config import UPLOAD_DIR, ADMIN_USERNAME, ADMIN_PASSWORD
 from app.auth import authenticate_user, create_access_token, is_authenticated, COOKIE_NAME
 from app.ocr_engine import extract_and_ocr_zip
-from app.font_engine import process_and_build_font
+from app.font_engine import process_and_build_font, merge_latin_fonts
 
-# Logging configuration
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
@@ -23,9 +22,9 @@ logging.basicConfig(
 logger = logging.getLogger("font_replacer")
 
 app = FastAPI(
-    title="Handwritten Font Replacer",
+    title="Handwritten & Latin Font Replacer",
     description="Automated font glyph replacer using Tesseract OCR, Potrace, and FontForge.",
-    version="1.0.0"
+    version="2.0.0"
 )
 
 @app.exception_handler(Exception)
@@ -37,13 +36,16 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": f"Internal Server Error: {str(exc)}"}
     )
 
-
-# Static files and Templates setup
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
-# --- Pydantic Data Models ---
+# --- Pydantic Models ---
+class FontMetadata(BaseModel):
+    family_name: str = "Custom Font"
+    style_name: str = "Regular"
+    full_name: str = "Custom Font Regular"
+
 class GlyphMappingItem(BaseModel):
     image_path: str
     char: str
@@ -51,8 +53,13 @@ class GlyphMappingItem(BaseModel):
 class GenerateFontRequest(BaseModel):
     upload_id: str
     mappings: List[GlyphMappingItem]
+    metadata: FontMetadata = FontMetadata()
 
-# --- Route Handlers ---
+class GenerateFont2FontRequest(BaseModel):
+    upload_id: str
+    metadata: FontMetadata = FontMetadata()
+
+# --- Auth Routes ---
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
@@ -95,6 +102,7 @@ async def dashboard_page(request: Request):
         context={"user": ADMIN_USERNAME}
     )
 
+# --- Mode 1 API: Handwritten Glyphs (ZIP + Base Font) ---
 
 @app.post("/api/upload")
 async def handle_upload(
@@ -105,7 +113,6 @@ async def handle_upload(
     if not is_authenticated(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    # Validate file extensions
     font_ext = os.path.splitext(font_file.filename)[1].lower()
     zip_ext = os.path.splitext(zip_file.filename)[1].lower()
 
@@ -114,12 +121,10 @@ async def handle_upload(
     if zip_ext != '.zip':
         raise HTTPException(status_code=400, detail="Glyph images file must be a .zip archive")
 
-    # Create unique upload session directory
     upload_id = str(uuid.uuid4())
     session_dir = os.path.join(UPLOAD_DIR, upload_id)
     os.makedirs(session_dir, exist_ok=True)
 
-    # Save uploaded files
     saved_font_path = os.path.join(session_dir, f"base_font{font_ext}")
     saved_zip_path = os.path.join(session_dir, "glyphs.zip")
 
@@ -128,7 +133,6 @@ async def handle_upload(
     with open(saved_zip_path, "wb") as f:
         shutil.copyfileobj(zip_file.file, f)
 
-    # Extract and run OCR
     extracted_imgs_dir = os.path.join(session_dir, "extracted_images")
     glyphs = extract_and_ocr_zip(saved_zip_path, extracted_imgs_dir)
 
@@ -147,7 +151,6 @@ async def handle_generate_font(request: Request, body: GenerateFontRequest):
     if not os.path.exists(session_dir):
         raise HTTPException(status_code=404, detail="Upload session expired or not found")
 
-    # Locate base font file
     base_font_path = None
     for f in os.listdir(session_dir):
         if f.startswith("base_font"):
@@ -157,17 +160,88 @@ async def handle_generate_font(request: Request, body: GenerateFontRequest):
     if not base_font_path or not os.path.exists(base_font_path):
         raise HTTPException(status_code=400, detail="Base font file missing from session")
 
-    # Convert pydantic mappings to list of dicts
     mappings = [{"image_path": m.image_path, "char": m.char} for m in body.mappings]
+    metadata_dict = body.metadata.model_dump() if hasattr(body.metadata, 'model_dump') else body.metadata.dict()
 
     output_dir = os.path.join(session_dir, "output")
     try:
-        compiled_font_path = process_and_build_font(base_font_path, mappings, output_dir)
+        compiled_font_path = process_and_build_font(base_font_path, mappings, metadata_dict, output_dir)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Font processing error: {str(e)}")
 
     if not os.path.exists(compiled_font_path):
         raise HTTPException(status_code=500, detail="Failed to compile output TTF font file")
+
+    return {
+        "status": "success",
+        "download_url": f"/api/download-font/{body.upload_id}"
+    }
+
+# --- Mode 2 API: Font-to-Font Latin Replacement ---
+
+@app.post("/api/upload-font2font")
+async def handle_upload_font2font(
+    request: Request,
+    font_a: UploadFile = File(...),
+    font_b: UploadFile = File(...)
+):
+    if not is_authenticated(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    ext_a = os.path.splitext(font_a.filename)[1].lower()
+    ext_b = os.path.splitext(font_b.filename)[1].lower()
+
+    if ext_a not in ['.ttf', '.otf'] or ext_b not in ['.ttf', '.otf']:
+        raise HTTPException(status_code=400, detail="Both files must be .ttf or .otf font files")
+
+    upload_id = str(uuid.uuid4())
+    session_dir = os.path.join(UPLOAD_DIR, upload_id)
+    os.makedirs(session_dir, exist_ok=True)
+
+    saved_a_path = os.path.join(session_dir, f"font_a{ext_a}")
+    saved_b_path = os.path.join(session_dir, f"font_b{ext_b}")
+
+    with open(saved_a_path, "wb") as f:
+        shutil.copyfileobj(font_a.file, f)
+    with open(saved_b_path, "wb") as f:
+        shutil.copyfileobj(font_b.file, f)
+
+    return {
+        "upload_id": upload_id,
+        "font_a_filename": font_a.filename,
+        "font_b_filename": font_b.filename
+    }
+
+@app.post("/api/generate-font2font")
+async def handle_generate_font2font(request: Request, body: GenerateFont2FontRequest):
+    if not is_authenticated(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    session_dir = os.path.join(UPLOAD_DIR, body.upload_id)
+    if not os.path.exists(session_dir):
+        raise HTTPException(status_code=404, detail="Upload session expired or not found")
+
+    font_a_path = None
+    font_b_path = None
+    for f in os.listdir(session_dir):
+        if f.startswith("font_a"):
+            font_a_path = os.path.join(session_dir, f)
+        elif f.startswith("font_b"):
+            font_b_path = os.path.join(session_dir, f)
+
+    if not font_a_path or not font_b_path:
+        raise HTTPException(status_code=400, detail="Missing source or base font in session")
+
+    metadata_dict = body.metadata.model_dump() if hasattr(body.metadata, 'model_dump') else body.metadata.dict()
+    output_dir = os.path.join(session_dir, "output")
+
+    try:
+        compiled_font_path = merge_latin_fonts(font_a_path, font_b_path, metadata_dict, output_dir)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Font merge error: {str(e)}")
+
+    if not os.path.exists(compiled_font_path):
+        raise HTTPException(status_code=500, detail="Failed to compile merged font file")
 
     return {
         "status": "success",
@@ -180,13 +254,20 @@ async def download_font(upload_id: str, request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     session_dir = os.path.join(UPLOAD_DIR, upload_id)
-    font_path = os.path.join(session_dir, "output", "custom_handwritten_font.ttf")
+    output_dir = os.path.join(session_dir, "output")
 
-    if not os.path.exists(font_path):
+    font_path = None
+    if os.path.exists(output_dir):
+        for f in os.listdir(output_dir):
+            if f.endswith(".ttf"):
+                font_path = os.path.join(output_dir, f)
+                break
+
+    if not font_path or not os.path.exists(font_path):
         raise HTTPException(status_code=404, detail="Requested font file not found")
 
     return FileResponse(
         path=font_path,
-        filename="custom_handwritten_font.ttf",
+        filename=os.path.basename(font_path),
         media_type="font/ttf"
     )
